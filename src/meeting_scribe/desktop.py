@@ -203,17 +203,12 @@ BRAND_ICON_PT = 20
 # Label,把 emoji 寫進句子裡反而對不上那一排。
 # ⚠️ **「檔案不外傳」不可省**:那是隱私規格對使用者的承諾(spec §7),也是他敢把
 # 會議錄音丟進來的唯一理由;網頁版那邊測試守著,這邊由 `tests/test_desktop.py` 守。
-# ⚠️ **第一句講它是手機 App「會議助手」的電腦版**(2026-11-07 改名,使用者選 B+C 案:副標併進、左上角
-# 另有「ⓘ 關於」)。⚠️ **兩句之間是刻意的硬斷行**:不斷的話視窗寬度一變就斷在「請先 / 看」
+# ⚠️ **第一句講它是手機 App「會議助手」的電腦版**(2026-11-07 改名,使用者選 B+C 案;左上角那顆
+# 「ⓘ 關於」2026-11-08 拿掉、併進說明的「💡 關於這個工具」)。⚠️ **兩句之間是刻意的硬斷行**:不斷的話視窗寬度一變就斷在「請先 / 看」
 # 這種地方(設計稿實拍),`break_lines` 會照留這個換行。
 APP_SUBTITLE = (t("手機 App「會議助手」的電腦版:把聲音、文字、圖像轉換成適合 AI 閱讀的 Markdown"
                 "(以節省 Token),聲紋與名單跟手機同步。\n"
                 "全部在本機轉換,檔案不外傳;第一次使用請先看「使用說明」(首次轉檔需下載模型)。"))
-# 「ⓘ 關於」:頁首左上角(右上角是 🌐 語言選單),點了開 `App._about_open`。
-ABOUT_BUTTON = t("ⓘ 關於")
-# 關於視窗裡的說明(使用者 2026-11-07 選定的文案)。⚠️ 跟 `APP_SUBTITLE` 第一句講同一件事,改一句要改兩句
-ABOUT_TEXT = t("手機 App「會議助手」的電腦版:聲紋與名單跟手機同步、逐字稿格式一致;"
-               "內含 Scribe2MD 核心(文件與錄音轉 Markdown)。")
 
 # 頁首三行(大標、副標、頂層分頁列)之間的行距(邏輯 px),**量網頁版得到的**
 # (2026-09-03 使用者:「AP 最上面幾行字的行距,請依照 WEB 的行距調整」;@150% 逐列掃
@@ -1359,8 +1354,7 @@ def configure_styles(root: tk.Misc, fam: str, pal: dict) -> None:
 # Segoe UI Emoji 裡沒有彩色字形)。其餘開頭的符號(▶ ⏹ 🔍 🔀)是彩色 emoji,
 # `HandButton` 會畫成彩色圖片。⚠️ **四組主要動作鈕的記號一律走這兩個**(2026-09-12
 # 使用者指定:開始一律 ●、停止一律 ■),不可以改用 ⏹——那顆會被畫成藍色方塊。
-BUTTON_TEXT_MARKS = "●■★ⓘ"
-# ⚠️ **「ⓘ」也照文字畫**(2026-11-07「ⓘ 關於」):它不是 emoji,彩色 emoji 字型裡沒有字形
+BUTTON_TEXT_MARKS = "●■★"
 # ⚠️ **「★」也照文字畫**(2026-10-17 錄音中的「★ 重點」):它落在 `is_symbol` 那一段碼位,
 # 不擋的話會走彩色 emoji 那條路,而它在 emoji 字型裡沒有字形(Apple 的只有 ⭐)
 # 上面那兩個裡,**改成程式自己畫**的記號(加上暫停的「‖」;2026-10-07 使用者看實拍指出
@@ -3725,47 +3719,7 @@ class App(tk.Tk):
         self._wrap(ttk.Label(head, text=APP_SUBTITLE, style="BrandSub.TLabel",
                              justify="center")).pack(pady=(self.px(HEAD_GAP_SUB), 0))
         self._lang_menu = self._lang_button(head)
-        # 「ⓘ 關於」放左上角、跟右上角的 🌐 對稱;同樣 `place` 不進那一排 `pack`(理由見 `_lang_button`)。
-        # ⚠️ 樣式是**頁底色那張**(`SMALL_PAGE_STYLE`):頁首坐在灰底上,用白卡那張四角會露出白色方塊
-        # (2026-11-07 設計稿實拍)
-        self._about_btn = HandButton(head, text=ABOUT_BUTTON, style=skin.SMALL_PAGE_STYLE,
-                                     command=self._about_open)
-        self._about_btn.place(relx=0.0, x=self.px(SP_SM), y=0, anchor="nw")
         return head
-
-    def _about_open(self) -> tk.Toplevel:
-        r"""「關於」小視窗:程式名、版號、它是手機 App 的電腦版、核心名與版號(使用者 2026-11-07 選 C 案)。
-
-        ⚠️ **說明那句自己斷行**(`break_lines`):Label 的 `wraplength` 只在空白處斷,設計稿上第一行
-        只剩「手機」兩個字就是這樣來的。⚠️ 核心跟完整 App 是同一份程式,版號相同。"""
-        from meeting_scribe import update
-
-        win = tk.Toplevel(self)
-        win.title(t("關於"))
-        win.configure(bg=self.pal["page"])
-        win.resizable(False, False)
-        body = ttk.Frame(win, style="Page.TFrame", padding=self.px(SP_MD))
-        body.pack(fill="both", expand=True)
-        line = ttk.Frame(body, style="Page.TFrame")
-        line.pack(anchor="w")
-        photo = self._brand_image(BRAND_ICON_PT)
-        if photo is not None:
-            ttk.Label(line, image=photo, style="Brand.TLabel").pack(side="left", padx=(0, self.px(SP_SM)))
-        ttk.Label(line, text=WINDOW_TITLE, style="Brand.TLabel").pack(side="left")
-        version = update.current_version() or t("不明")
-        ttk.Label(body, text=f"v{version}", style="BrandSub.TLabel").pack(anchor="w", pady=(self.px(SP_XS), 0))
-        text = ttk.Label(body, style="BrandSub.TLabel", justify="left")
-        width = self.px(440)
-        text.configure(text=break_lines(ABOUT_TEXT, width, self._label_font(text).measure), wraplength=width)
-        text.pack(anchor="w", pady=(self.px(SP_SM), 0))
-        ttk.Label(body, text=t("核心:{name} {version}", name=brand.CORE_NAME, version=version),
-                  style="BrandSub.TLabel").pack(anchor="w", pady=(self.px(SP_SM), 0))
-        HandButton(body, text=t("關閉"), style=skin.SMALL_PAGE_STYLE, command=win.destroy).pack(
-            anchor="e", pady=(self.px(SP_MD), 0))
-        win.transient(self)
-        win.bind("<Escape>", lambda _e: win.destroy())
-        self._about_win = win
-        return win
 
     def _lang_button(self, head) -> ttk.Menubutton:
         r"""頁首右上角的 🌐 介面語言選單(使用者 2026-10-21 選 A 案,docs/dev/i18n.md)。

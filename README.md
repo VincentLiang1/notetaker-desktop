@@ -189,9 +189,9 @@ Double-click the desktop icon and the tool's window opens. “What to do” star
 
 - A button that doesn't respond (usually another job is running), how to tell it's still running when minimized, 99% CPU is normal, a folder window that only flashes in the taskbar, recording data discontinuous, how to retry a failed conversion, deleting the old `.md` to redo a file, which log file to attach when reporting a problem
 
-**💡 Why this tool exists**
+**💡 About this tool**
 
-- What problem this tool set out to solve, how it grew into what it is now, and what became visible once it was built (the one section that isn't about how to use it)
+- It is the desktop version of the Notetaker phone app, with the Scribe2MD core inside; what problem this tool set out to solve, how it grew into what it is now, and what became visible once it was built, and how to update to a new version (the one section that isn't about how to use it)
 
 ### Where the details are
 
