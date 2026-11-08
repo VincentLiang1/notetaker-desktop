@@ -120,7 +120,9 @@ def header(md: str, name: str = "", seconds: float | None = None,
         h.seconds = seconds if seconds else None
     seen: set[str] = set()
     autos = [v.mark_auto_name for v in vocab.ALL]
-    for line in md.split("\n"):
+    for raw in md.split("\n"):
+        # 去頭尾空白與 \r:手改過的檔、CRLF 的檔講者行前後可能多東西(同 `minutes.timed_lines`)
+        line = raw.strip()
         if h.title is None:
             v = next((v for v in vocab.ALL if line.startswith(v.transcript_heading)), None)
             if v is not None:

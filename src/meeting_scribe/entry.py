@@ -190,6 +190,11 @@ def register_desktop(root: Path | None = None) -> None:
     try:
         if update.is_dev_tree(root):
             return
+        # 核心不是完整 App:在核心資料夾直接跑 `install_skill.py`(沒帶 `--entry`)會走到這裡,
+        # 把核心記成 desktop(2026-11-08 Windows 實機看到)。眼前 `candidates` 去重所以沒事,但真的
+        # 完整 App 的登記會被它蓋掉,要等那份 App 再開一次才回來
+        if build_of(root) == "core":
+            return
         installs_file().parent.mkdir(parents=True, exist_ok=True)
         installs_file().write_text(json.dumps({"desktop": str(root)}, ensure_ascii=False), encoding="utf-8")
         relink()

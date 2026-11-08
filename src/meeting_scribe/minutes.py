@@ -367,6 +367,15 @@ def _is_transcript_heading(line: str) -> bool:
     return any(line.startswith(v.transcript_heading.rstrip(" —")) for v in vocab.ALL)
 
 
+def _starts_body(line: str) -> bool:
+    """正文從這一行開始:逐字稿標題,或(沒有標題時)第一行講者行。
+
+    ⚠️ 批次那條路(`docaudio._drop_leading_heading`)刻意拿掉了 `## 會議逐字稿` 那行,
+    只認標題的話,批次轉出來的逐字稿一句都讀不到、草稿報「逐字稿是空的」
+    (同 `highlights._insert_legends` 的認法)。"""
+    return _is_transcript_heading(line) or bool(export.SPEAKER_LINE_RE.match(line))
+
+
 def timed_lines(md: str) -> list[TimedLine]:
     """逐字稿 md 的正文(`## 會議逐字稿` 到 `## 講者辨識診斷`)→「名字:這一輪說的話」。
 
@@ -382,6 +391,7 @@ def timed_lines(md: str) -> list[TimedLine]:
             continue
         if export.starts_diagnostics(line):
             break
+        in_body = in_body or _starts_body(line)
         if not in_body or not line:
             continue
         m = export.SPEAKER_LINE_RE.match(line)
@@ -422,6 +432,7 @@ def highlighted_turns(md: str) -> list[MarkedTurn]:
             continue
         if export.starts_diagnostics(line):
             break
+        in_body = in_body or _starts_body(line)
         if not in_body or not line:
             continue
         m = export.SPEAKER_LINE_RE.match(line)

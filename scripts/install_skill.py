@@ -35,10 +35,13 @@ ROOT = Path(__file__).resolve().parents[1]
 # 它同一個家族,而且**不可以是 `.md`**:`install_one` 會把每個 `.md` 當範本
 # 跑一次 `render`,標記檔被當範本處理只是白費工,還讓它看起來像 Skill 內容。
 MARKER = ".meeting-scribe-skill"
+# 說明寫中性的(2026-11-07 改名):裝它的可能是會議助手電腦版的 Install-Skill,也可能是 Scribe2MD 核心的
+# 安裝程式;中英各一句,只看得懂英文的人也知道這是什麼
 MARKER_TEXT = (
-    "本資料夾由「AI 文件.MD 轉換器」的 Skill 安裝程式(Install-Skill.bat /\n"
-    "Install-Skill.command)建立,重新安裝時會把範本已經沒有的檔一併清掉。\n"
-    "請不要把自己的檔案放在這裡。\n"
+    "本資料夾由 Scribe2MD 的技能安裝程式建立(會議助手電腦版的 Install-Skill,或 Scribe2MD 核心的安裝程式),\n"
+    "重新安裝時會把範本已經沒有的檔一併清掉。請不要把自己的檔案放在這裡。\n"
+    "This folder was created by the Scribe2MD skill installer (Notetaker Desktop's Install-Skill, or the\n"
+    "Scribe2MD core installer). Reinstalling removes files the template no longer has; don't keep your own files here.\n"
 )
 
 

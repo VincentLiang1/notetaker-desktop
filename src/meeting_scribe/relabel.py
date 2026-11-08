@@ -362,9 +362,15 @@ def rename(md_text: str, name_map: dict[str, str],
     不含任何人講的話,所以粗體必定是標籤;內文裡的粗體則不得被動
     (使用者講的話裡剛好出現某個名字是很正常的事)。"""
     rename_prose = export.diag_prose_renamer(name_map)
-    auto = set(auto_named or ())
     # 〔機器辨識〕與「名字來源」照**這份 md 的**會議語言寫(英文逐字稿是 [auto-named])
     v = vocab.detect(md_text)
+    auto_marks = {x.mark_auto_name for x in vocab.ALL}
+    # ⚠️ **已經標著〔機器辨識〕的,名字沒換就還是機器辨識、換了就是人工確認**:重設講者
+    # 那條路沒有錄音、`auto_named` 一定是空的,只看它的話,舊標記會留在講者行上、
+    # 診斷表卻寫「人工確認」(同一份檔自相矛盾);反過來名字原封不動也不算有人確認過
+    marked = {m.group("name") for m in (_SPEAKER_RE.match(x.strip()) for x in md_text.splitlines())
+              if m and auto_marks & set(export.split_marks(m))}
+    auto = set(auto_named or ()) | {old for old in marked if name_map.get(old) == old}
     out = []
     in_diagnostics = False
     for line in md_text.splitlines():
@@ -376,8 +382,8 @@ def rename(md_text: str, name_map: dict[str, str],
             # ⚠️ **既有的標記要留著、而且新的排在前面**:那一行可能已經帶著
             # 〔身分存疑〕或〔多人交錯〕(轉檔當下標的),整段換掉就把它們弄丟了。
             # 順序照 export 那邊定的「名字來源 → 標籤可疑 → 這一輪交錯」
-            marks = export.split_marks(m)
-            if old in auto and v.mark_auto_name not in marks:
+            marks = [x for x in export.split_marks(m) if x not in auto_marks]
+            if old in auto:
                 marks.insert(0, v.mark_auto_name)
             out.append(export.speaker_line(
                 name_map[old],
