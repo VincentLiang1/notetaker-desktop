@@ -8,6 +8,8 @@
 
 📥 **下載(免費):[最新版](https://github.com/VincentLiang1/notetaker-desktop/releases/latest)** —— 點進去,在頁面下方的 `Assets` 區塊挑你的平台:**Windows 點 `notetaker-desktop-win.zip`、Mac 點 `notetaker-desktop-mac.zip`**。檔案不大是正常的(Windows 版 2MB 出頭、Mac 版約 30MB,多的是 App 內附的 Python),執行環境與 AI 模型都是第一次啟動時才自動下載(合計約 3～6GB,見第五章)。
 
+🔗 **搭配使用:** 手機 App「會議助手」可以現場錄音,聲紋與名單跟電腦版同步;再加上免費的 Wiki Agent(要一台常開的電腦與 Claude 付費帳號),錄完自動轉成文字、整理進你電腦上的 LLM Wiki 知識庫。整套怎麼搭配,見〈[會議助手全套服務架構](https://github.com/VincentLiang1/wiki-agent/blob/main/How-Notetaker-Fits-Together.zh-TW.md)〉。
+
 ![聲音→MD:現場收音或轉現成的錄音錄影,做成含講者分離的繁體中文逐字稿](docs/screenshot-audio.png)
 
 ![文字、圖像→MD:Word、PowerPoint、Excel、PDF、網頁、掃描件、照片與郵件批次轉成 Markdown](docs/screenshot-doc.png)

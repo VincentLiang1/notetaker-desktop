@@ -93,6 +93,9 @@ TROUBLE = "🆘 好像怪怪的"
 # 2026-11-08 使用者裁定改名「關於這個工具」:頁首左上角那顆「ⓘ 關於」拿掉,它講的那幾句
 # (手機版的電腦版、核心名)併進這一篇開頭——版號、更新、下載點本來就在這一篇與說明頁底下
 ORIGIN = "💡 關於這個工具"
+# 〈會議助手全套服務架構〉的正本在 wiki-agent repo,三語各一份(英文沒有語言後綴)。
+# 簡中說明是執行期從繁中轉出來的,網址是 ASCII、`to_hans_doc` 不會動它,所以在 help_pages 換成簡中那份
+OVERVIEW_URL = "https://github.com/VincentLiang1/wiki-agent/blob/main/How-Notetaker-Fits-Together.zh-TW.md"
 EVERYTHING = "📖 全部內容(可搜尋)"
 
 
@@ -1236,6 +1239,11 @@ def _origin() -> str:
         "這是手機 App「會議助手」的電腦版:聲紋與名單跟手機同步、逐字稿格式一致;"
         "內含 Scribe2MD 核心(文件與錄音轉 Markdown)。\n\n"
         "目前的版本顯示在這一頁最底下,核心的版本與它相同。\n\n"
+        "### 🔗 搭配手機與知識庫\n"
+        "搭配手機 App「會議助手」可以現場錄音,聲紋與名單跟電腦版同步;"
+        "再加上免費的 Wiki Agent(要一台常開的電腦與 Claude 付費帳號),"
+        "錄完自動轉成文字、整理進你電腦上的 LLM Wiki 知識庫。\n\n"
+        f"整套怎麼搭配,見〈會議助手全套服務架構〉:{OVERVIEW_URL}\n\n"
         "### 起點:會議的資訊,要留得下來、也找得回來\n"
         "一場會議的資訊量很大——除了最後的決議,還有討論的前因後果、"
         "數字是怎麼算出來的、哪些事情還有疑慮。以前只能靠紙筆記重點,"
@@ -1336,8 +1344,13 @@ def help_pages(device_name: str, max_speakers: int, lang: str | None = None) -> 
         from meeting_scribe import zhcn
 
         # ⚠️ 用 `to_hans_doc` 不用 `to_hans`:檔名(`Install.bat`)與記錄檔原話在磁碟上就是繁體
-        return [HelpPage(zhcn.to_hans(p.label), zhcn.to_hans_doc(p.top), p.image,
-                         zhcn.to_hans_doc(p.bottom)) for p in pages]
+        cn_url = OVERVIEW_URL.replace(".zh-TW.", ".zh-CN.")
+
+        def doc(s: str) -> str:
+            return zhcn.to_hans_doc(s).replace(OVERVIEW_URL, cn_url)
+
+        return [HelpPage(zhcn.to_hans(p.label), doc(p.top), p.image, doc(p.bottom))
+                for p in pages]
     return pages
 
 

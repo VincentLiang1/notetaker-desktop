@@ -8,6 +8,8 @@ Supports **Windows 10/11 (x64)** and **Apple Silicon Macs on macOS 14.2 or later
 
 📥 **Download (free): [latest version](https://github.com/VincentLiang1/notetaker-desktop/releases/latest)**: open it and pick your platform in the `Assets` section at the bottom: **Windows: `notetaker-desktop-win.zip`, Mac: `notetaker-desktop-mac.zip`**. The files are small on purpose (just over 2 MB for Windows, about 30 MB for Mac, mostly the Python bundled in the App); the runtime and the AI models are downloaded automatically on first start (about 3–6 GB in total, see chapter 5).
 
+🔗 **Works with:** the Notetaker phone app records meetings on the spot and syncs voiceprints and the people list with Notetaker Desktop. Add the free Wiki Agent (it needs an always-on computer and a paid Claude plan) and recordings are transcribed and filed into the LLM Wiki knowledge base on your computer automatically. How it all fits together: [How Notetaker Fits Together](https://github.com/VincentLiang1/wiki-agent/blob/main/How-Notetaker-Fits-Together.md).
+
 ![Audio→MD: record live or transcribe existing recordings into a transcript with speaker separation](docs/screenshot-audio.en.png)
 
 ![Docs→MD: convert Word, PowerPoint, Excel, PDF, web pages, scans, photos and email to Markdown in batches](docs/screenshot-doc.en.png)
