@@ -363,6 +363,18 @@ def desktop_dir():
     return Path.home() / "Desktop"
 
 
+def default_output_parent():
+    r"""家目錄(`~/會議助手電腦版` 的那一層)。
+
+    ⚠️ **不放「文件」**(2026-11-09 使用者選):「文件」「桌面」「下載項目」是 macOS 的
+    受保護資料夾,第一次寫進去會跳授權視窗,按了「不允許」就寫不進去;而且開了「iCloud 雲碟
+    → 桌面與文件檔案夾」的機器會把錄音自動上傳——撞到隱私規格那張連網白名單。家目錄兩者都沒有,
+    Finder 側邊欄點自己的名字就看得到。"""
+    from pathlib import Path
+
+    return Path.home()
+
+
 def start_menu_programs_dir():
     """macOS 沒有「開始功能表」這個東西。
 

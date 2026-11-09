@@ -77,6 +77,7 @@ from meeting_scribe.cancel import Cancelled
 from meeting_scribe.errors import UserFacingError
 from meeting_scribe.brand import APP_TITLE
 from meeting_scribe.i18n import t
+from meeting_scribe import outdir
 from meeting_scribe import paths as paths_mod
 from meeting_scribe.paths import appdata_root, assets_dir, repo_root
 from meeting_scribe.pipeline import run_pipeline
@@ -323,8 +324,9 @@ MONO_FAMILY = plat.mono_family()
 # 拿到的是單色字形,在 macOS 上雖然是彩色的、**但那塊圖不透明**——分頁列每顆圖示
 # 後面就會框著一塊白方塊(2026-09-24 使用者一眼看出來)。真的取不到字型才退回文字。
 
-# 逐字稿的落地位置(與網頁版同一個資料夾:兩套介面轉出來的東西不該分家)。
-OUTPUT_DIR = repo_root() / "output"
+# 逐字稿與錄音檔的落地位置**不是常數**(2026-11-09 起使用者可以自己指定,Mac 的預設也搬出了
+# `~/Library`):一律問 `outdir.current()`,開始一趟工作時問 `outdir.for_run()`(指定的寫不進去
+# 會退回預設)。⚠️ **走模組屬性 `outdir.X`**,測試把假貨 patch 在那上面(同 `naming_core` 那條)。
 
 # 模型的介面標籤 ↔ 引擎鍵。⚠️ **這個選擇必須保留**(2026-07-26 曾移除、同日裁定
 # 還原):快速 = large-v3-turbo、精準 = large-v3、Apple = Mac 內建的語音辨識(2026-10-10,
@@ -602,6 +604,17 @@ ADV_BUTTON = t("⚙ 進階參數設定…")
 # ⚠️ **文件頁那顆受 `ACTION_BTN_W` 限制**(與主要動作鈕同寬並排):圖示是實打實的寬度,
 # 改字樣之前先跑 `test_the_output_folder_buttons_wear_the_folder_icon`。
 OPEN_DIR_BUTTON = t("📂 輸出資料夾…")
+# 滑鼠停在轉檔頁那顆「輸出資料夾…」上的小泡泡(2026-11-09 使用者選「滑鼠停留顯示提示」):
+# 那顆鈕一直按得到,沒說會開去哪的話,使用者分不出「存放位置」改了沒有。
+OPEN_DIR_TIP = t("存放位置:{v}")
+OPEN_DIR_TIP_RUN = t("這一趟的成品在:{v}")
+OPEN_DIR_TIP_MANY = t("這一趟的成品在 {n} 個資料夾")
+# 「進階參數設定」最後一列(2026-11-09 使用者選甲案:兩顆鈕並排)
+OUTDIR_TITLE = t("存放位置")
+OUTDIR_CHANGE = t("變更…")
+OUTDIR_RESET = t("恢復預設")
+OUTDIR_PICK_TITLE = t("選擇逐字稿與錄音檔的存放位置")
+OUTDIR_CANNOT = t("這個資料夾寫不進去,請換一個")
 # 「地端 AI」模式(`minutes.py`;2026-10-11 使用者選定 B 案、草稿存 App 自己的資料夾)。
 # ⚠️ **「它是 AI 草稿」要講在按下去之前**:小模型會漏、會寫錯,而沒參加會議的人分不出來
 # (手機版三輪實測,scribe2md-ios `docs/spec/08` §8.12)。
@@ -1677,6 +1690,25 @@ class Fold:
     open: bool = False
 
 
+def elide_path(text: str, label, max_px: int) -> str:
+    r"""把路徑縮到 `label` 的字型量起來不超過 `max_px`:保留頭一段與尾巴,中間換成「…」。
+
+    ⚠️ **用 `label` 自己的字型量**(`tkfont.Font(font=…).measure`):估字數在中英混排時差很多,
+    而「進階參數設定」那一行只有 270 px、不能折。縮到只剩最後一層還放不下就照樣回那一層
+    (資料夾名本身就那麼長,再砍就認不出是哪個)。"""
+    font = tkfont.Font(font=label.cget("font") or ttk.Style().lookup(
+        str(label.cget("style")) or "TLabel", "font") or "TkDefaultFont")
+    if font.measure(text) <= max_px:
+        return text
+    parts = Path(text).parts
+    sep = "/" if "/" in text else "\\"
+    for keep in range(len(parts) - 2, 0, -1):
+        cand = sep.join([parts[0].rstrip("/\\"), "…", *parts[-keep:]])
+        if font.measure(cand) <= max_px:
+            return cand
+    return sep.join(["…", parts[-1]])
+
+
 class HandButton(ttk.Button):
     r"""會換游標、而且把字樣開頭的 emoji 畫成**彩色圖片**的按鈕——兩件事都是照網頁版。
 
@@ -2034,6 +2066,9 @@ class App(tk.Tk):
         self._update_out: dict = {}      # 執行緒留給主執行緒的結果(工作執行緒不碰 Tk)
         self._update_win: tk.Toplevel | None = None
         self._honor_check: ttk.Checkbutton | None = None
+        # 「進階參數設定」的「存放位置」那一列(對話框點了才建,見 `_adv_close`)
+        self._outdir_hint: ttk.Label | None = None
+        self._outdir_change = self._outdir_reset = None
 
         self._styles()
         self._build_ui()
@@ -5297,20 +5332,21 @@ class App(tk.Tk):
         # 會盯著左欄等一個不會出現的進度條。
         self._run_title = ttk.Label(head, text=RUN_TITLE, style="CardH.TLabel")
         self._run_title.pack(side="left")
-        # ⚠️ 開的是**這一趟**的成品所在:單檔/收音/重設講者都在 output,但批次的成品在
-        # 原檔旁邊、可能跨好幾個資料夾(`_run_dirs`:None = output,清單 = 批次報告裡的
-        # 那幾個)。每一趟開始時歸零(`_run_lock`),否則轉完一批再轉單檔,這顆鈕開的還
-        # 是上一批的資料夾——「狀態機的驗收要連跑兩趟」那一族。
+        # ⚠️ 開的是**這一趟**的成品所在:單檔/收音/重設講者各自記下自己存在哪,批次的成品
+        # 在原檔旁邊、可能跨好幾個資料夾(`_run_dirs`:None = 還沒有這一趟 → 存放位置,清單 =
+        # 這一趟的那幾個)。每一趟開始時歸零(`_run_lock`),否則轉完一批再轉單檔,這顆鈕開的
+        # 還是上一批的資料夾——「狀態機的驗收要連跑兩趟」那一族。
         self._run_dirs: list[str] | None = None
+        # 「完成。」後面要不要補一句「指定的存放位置寫不進去,改存到預設」(見 `outdir.for_run`)
+        self._run_out_note = ""
         # ⚠️ 穿線框藍(`CTA_STYLE`)而不是一般的灰底小鈕(2026-09-04 使用者圈出這一顆:
-        # 「請改為藍色框的按鈕樣式」):它與同一張卡上的「選擇檔案…」是同一款,而停用
-        # 時邊框會自己換成灰的(`Sq.cta` 的 `cta-dis`),還沒轉完照樣看得出按不動。
+        # 「請改為藍色框的按鈕樣式」):它與同一張卡上的「選擇檔案…」是同一款。
+        # ⚠️ **一直按得到**(2026-11-09 使用者選;先前要轉完才亮):要拿檔案的人多半是開程式
+        # 就想找上次的成品,不是剛轉完。
         self._run_open = HandButton(head, text=OPEN_DIR_BUTTON, style=skin.CTA_STYLE,
-                                    state="disabled",
-                                    command=lambda: doctab.open_output_dirs(
-                                        self._run_dirs if self._run_dirs is not None
-                                        else [str(OUTPUT_DIR)]))
+                                    command=self._run_open_dirs)
         self._run_open.pack(side="right")
+        self._tooltip(self._run_open, self._run_open_tip)
         # 錄音狀態列(只在「現場收音」模式 pack,見 `_mode_show`;排在標題與進度那組之間)
         self._rec_status_build(run)
         # 命名收工之後的捷徑(「地端 AI」B 案的後半;平常收著,見 `_minutes_jump_show`)
@@ -5661,10 +5697,10 @@ class App(tk.Tk):
     def _relabel_pick(self) -> None:
         """「選擇逐字稿…」:原生對話框,只挑一份 md。
 
-        ⚠️ **起始位置要給 `OUTPUT_DIR`**:逐字稿是工具自己寫進去的,而那個位置在
+        ⚠️ **起始位置要給存放位置(`outdir.current()`)**:逐字稿是工具自己寫進去的,而那個位置在
         兩個平台上都藏得很深(2026-09-29 使用者回報「找不到剛剛 MD 檔案」)。
         ⚠️ **不要在這裡判斷資料夾在不在**——那一段在 `relabel.pick_md` 裡只有一份。"""
-        picked = relabel.pick_md(self, initialdir=OUTPUT_DIR)
+        picked = relabel.pick_md(self, initialdir=outdir.current())
         if picked:
             self._relabel_set_path(picked)
 
@@ -5683,7 +5719,7 @@ class App(tk.Tk):
         功能不划算(同網頁版 `_run_relabel` 的取捨)。"""
         self._stage("")
         self._run_bar.configure(value=0)
-        self._run_open.configure(state="disabled")
+        self._run_dirs = None
         self._naming_hide()
         busy = self._busy_reason("run")
         if busy:
@@ -5809,7 +5845,6 @@ class App(tk.Tk):
         self._run_bar.configure(value=0)
         if error is None:
             self._stage(self._relabel_stage or relabel_stage(True, True))
-            self._run_open.configure(state="normal")
         elif isinstance(error, Cancelled):
             self._stage(t("已依要求停止。"))
         else:
@@ -5872,6 +5907,80 @@ class App(tk.Tk):
         self._slot_shrink(bar)
         return bar
 
+    def _run_open_dirs(self) -> None:
+        r"""轉檔頁的「📂 輸出資料夾…」:開這一趟的成品所在;還沒有這一趟就開存放位置。
+
+        ⚠️ **先建再開**(同 `_minutes_open_dir`):這顆鈕一直按得到,而第一次用、還沒轉過
+        任何一檔時存放位置還不存在——`open_output_dirs` 對不存在的路徑丟例外。
+        ⚠️ **開不了要講在畫面上**:Tk 會把按鈕 callback 的例外吞進記錄檔,畫面上就是
+        「按了沒反應」;批次一個都沒轉出來(`[]`)也走這條,講「這一批還沒有產生任何檔案」。"""
+        dirs = self._run_dirs
+        if dirs is None:
+            folder = outdir.current()
+            try:
+                folder.mkdir(parents=True, exist_ok=True)
+            except OSError:
+                logger.warning("存放位置建不起來:%s", folder, exc_info=True)
+            dirs = [str(folder)]
+        try:
+            doctab.open_output_dirs(dirs)
+        except UserFacingError as e:
+            self._stage(str(e))
+
+    def _run_open_tip(self) -> str:
+        """滑鼠停在「輸出資料夾…」上時的那句話(按下去會開哪裡)。"""
+        dirs = self._run_dirs
+        if dirs is None:
+            return OPEN_DIR_TIP.format(v=outdir.display(outdir.current()))
+        if len(dirs) == 1:
+            return OPEN_DIR_TIP_RUN.format(v=outdir.display(dirs[0]))
+        return OPEN_DIR_TIP_MANY.format(n=len(dirs))
+
+    def _tooltip(self, widget, text_of, delay_ms: int = 500):
+        r"""滑鼠停在 `widget` 上 `delay_ms` 之後,在它正下方浮一個小泡泡(字由 `text_of()` 當場給)。
+
+        ⚠️ **字要當場問**:「輸出資料夾…」會開哪裡跟著每一趟工作與設定變,建的時候抄一份就是過期的話。
+        ⚠️ **離開、按下都要收**:按下去會開 Finder／檔案總管,泡泡留在原處就蓋在新視窗前面。
+        ⚠️ **不搶焦點**(`overrideredirect` 的視窗不進 Dock／工作列,也不吃鍵盤)。
+        回 (進入, 收起) 兩支:測試直接呼叫它們——視窗沒顯示時 `event_generate("<Enter>")`
+        送不到,整套跑時那條測試就會隨前面的測試把視窗藏起來而時紅時綠。"""
+        state: dict = {"job": None, "win": None}
+
+        def hide(_e=None):
+            if state["job"] is not None:
+                self.after_cancel(state["job"])
+                state["job"] = None
+            if state["win"] is not None:
+                state["win"].destroy()
+                state["win"] = None
+
+        def show():
+            state["job"] = None
+            if not widget.winfo_exists() or not widget.winfo_ismapped():
+                return
+            win = tk.Toplevel(self)
+            win.overrideredirect(True)
+            win.attributes("-topmost", True)
+            # 一條 1 px 的框:顏色跟著皮膚走(同分隔線那條,`card_line`)
+            border = tk.Frame(win, background=self.pal["card_line"], padx=1, pady=1)
+            border.pack()
+            ttk.Label(border, text=text_of(), style="Hint.TLabel",
+                      padding=self.px(SP_XS * 2)).pack()
+            win.update_idletasks()
+            x = widget.winfo_rootx() + widget.winfo_width() - win.winfo_reqwidth()
+            y = widget.winfo_rooty() + widget.winfo_height() + self.px(SP_XS)
+            win.geometry(f"+{max(x, 0)}+{max(y, 0)}")
+            state["win"] = win
+
+        def enter(_e=None):
+            hide()
+            state["job"] = self.after(delay_ms, show)
+
+        widget.bind("<Enter>", enter, add="+")
+        widget.bind("<Leave>", hide, add="+")
+        widget.bind("<ButtonPress>", hide, add="+")
+        return enter, hide
+
     def _minutes_open_dir(self) -> None:
         r"""「地端 AI 進階設定」裡「草稿資料夾」那顆「📂 打開…」。⚠️ **先建再開**:這顆鈕一直按得到,而第一份草稿做出來之前
         那個資料夾還不存在——`open_output_dirs` 對不存在的路徑丟例外,Tk 把它吞進記錄檔,
@@ -5881,8 +5990,8 @@ class App(tk.Tk):
         doctab.open_output_dirs([str(folder)])
 
     def _minutes_pick(self) -> None:
-        """「選擇逐字稿…」(同 `_relabel_pick`,起始位置一樣是 `OUTPUT_DIR`)。"""
-        picked = relabel.pick_md(self, initialdir=OUTPUT_DIR,
+        """「選擇逐字稿…」(同 `_relabel_pick`,起始位置一樣是存放位置)。"""
+        picked = relabel.pick_md(self, initialdir=outdir.current(),
                                  title=t("選擇要整理成會議紀錄草稿的逐字稿(.md)"))
         if picked:
             self._minutes_set_path(picked)
@@ -6090,7 +6199,7 @@ class App(tk.Tk):
         他得重開程式才用得了,而畫面上沒有任何東西告訴他要重開。"""
         self._stage("")
         self._run_bar.configure(value=0)
-        self._run_open.configure(state="disabled")
+        self._run_dirs = None
         self._naming_hide()
         busy = self._busy_reason("run")
         if busy:
@@ -6160,7 +6269,6 @@ class App(tk.Tk):
         self._minutes_engine_note_sync()
         if error is None:
             self._run_bar.configure(value=0)
-            self._run_open.configure(state="normal")
             return
         self._run_bar.configure(value=0)
         if isinstance(error, Cancelled):
@@ -6664,7 +6772,7 @@ class App(tk.Tk):
         # ——用不到的機器上冒出一列按了沒作用的控制項,就是一個那個平台看得到的文案變更。
         # (刪模型那幾列 2026-10-29 搬去「地端 AI 進階設定」,見 `_llm_adv_open`)
         has_honor = live_scribe.guardrail_applies()
-        rows = 3 + has_honor
+        rows = 4 + has_honor
 
         def section(n: int, title: str, hint: str, build):
             r"""一列:左邊小標＋一行說明,右邊控制項;段與段之間一條細線。
@@ -6759,7 +6867,29 @@ class App(tk.Tk):
                     style="Card.TCheckbutton", command=self._adv_sync)
                 self._honor_check.pack(fill="x")
 
-            section(rows - 1, HONOR_TITLE, HONOR_INFO, honor)
+            section(rows - 2, HONOR_TITLE, HONOR_INFO, honor)
+
+        # ---- 存放位置 ------------------------------------------------------ #
+        # (2026-11-09 使用者:朋友要拿錄音檔與 md;選甲案「變更…」「恢復預設」兩顆並排。)
+        # ⚠️ **排最後**:上面幾列管「這一趟怎麼算」,這一列管「算完放哪」。
+        # ⚠️ **說明那一行放路徑本身**,太長就把中間縮成「…」(`_outdir_show`):那一行不能折
+        # (版面靠它撐著,見 `section`)。
+        # ⚠️ **穿卡片底那張皮(`SKIP_STYLE`),不是 `SKIP_PAGE_STYLE`**:底板不透明,圓角外側
+        # 畫的是皮被畫出來時指定的底色——穿視窗底那張,白卡上四個角就露出灰色、看起來是方的
+        # (2026-11-09 使用者一眼看出來)。對話框底下那顆「關閉」在卡片外面,才穿 PAGE 那張。
+        def place(parent):
+            self._outdir_change = HandButton(parent, text=OUTDIR_CHANGE,
+                                             style=skin.SKIP_STYLE,
+                                             command=self._outdir_pick)
+            self._outdir_change.pack(side="left", fill="x", expand=True)
+            self._outdir_reset = HandButton(parent, text=OUTDIR_RESET,
+                                            style=skin.SKIP_STYLE,
+                                            command=self._outdir_default)
+            self._outdir_reset.pack(side="left", fill="x", expand=True,
+                                    padx=(self.px(SP_XS), 0))
+
+        self._outdir_hint = section(rows - 1, OUTDIR_TITLE, "", place)
+        self._outdir_show()
 
         bar = ttk.Frame(pad, style="Page.TFrame")
         bar.pack(fill="x", pady=(self.px(CARD_GAP), 0))
@@ -6767,6 +6897,61 @@ class App(tk.Tk):
                    command=self._adv_close).pack(side="right")
         self._adv_sync()
         self._adv_place(win)
+
+    def _outdir_show(self, problem: str = "") -> None:
+        r"""把「存放位置」那一列的路徑重寫一次;`problem` 不是空的就改講它(剛挑的寫不進去)。
+
+        ⚠️ **路徑太長時縮的是中間**(`elide_path`):頭告訴人「在哪一顆磁碟／哪一個雲端」,
+        尾告訴人「是哪個資料夾」,中間那幾層最不重要。"""
+        if self._outdir_hint is None:
+            return
+        text = problem or elide_path(outdir.display(outdir.current()),
+                                     self._outdir_hint, self.px(ADV_TEXT_W))
+        self._outdir_hint.configure(text=text)
+        self._adv_lock()
+
+    def _outdir_pick(self) -> None:
+        r"""「變更…」:挑一個資料夾,當場試寫一次,寫得進去才記住。
+
+        ⚠️ **當場試寫**:挑到唯讀的位置(光碟、別人的共用資料夾)要現在就講,不是等下一場
+        會議收尾時才退回預設。
+        ⚠️ **面板掛在主視窗、不掛在這扇對話框**(2026-11-09 使用者:「選擇畫面太大,讓 Cancel
+        Choose 看不到」):macOS 的選擇面板是 sheet,從 parent 的頂端往下長、**大小程式改不了**,
+        而且 sheet 不會被拉回螢幕裡——掛在畫面中段的對話框上,底下那排按鈕就掉出螢幕。主視窗
+        頂端貼著選單列,「選擇檔案…」掛在那裡一直是正常的。
+        ⚠️ **選的時候先把對話框收起來、選完放回**:它是主視窗的 transient,浮在主視窗上面,
+        不收就蓋在面板前面。"""
+        if self._params_busy():
+            return
+        current = outdir.current()
+        win = self._adv_win
+        if win is not None:
+            win.withdraw()
+        try:
+            picked = srcfile.native_dialog(lambda fd, root: fd.askdirectory(
+                parent=root, title=OUTDIR_PICK_TITLE, mustexist=False,
+                **({"initialdir": str(current)} if current.is_dir() else {})), self)
+        finally:
+            if win is not None and win.winfo_exists():
+                win.deiconify()
+                win.lift()
+        if not picked:
+            return
+        if outdir.problem(picked) is not None:
+            logger.warning("挑的存放位置寫不進去:%s", picked)
+            self._outdir_show(OUTDIR_CANNOT)
+            return
+        outdir.choose(picked)
+        logger.info("存放位置改成 %s", outdir.current())
+        self._outdir_show()
+
+    def _outdir_default(self) -> None:
+        """「恢復預設」。"""
+        if self._params_busy():
+            return
+        outdir.reset()
+        logger.info("存放位置恢復預設:%s", outdir.current())
+        self._outdir_show()
 
     def _adv_place(self, win: tk.Toplevel) -> None:
         r"""把對話框擺在主視窗中央偏上;主視窗還沒 map(測試)就不擺。
@@ -6801,6 +6986,7 @@ class App(tk.Tk):
         self._model_cells = self._device_cells = None
         self._cores_spin = None
         self._honor_check = None
+        self._outdir_hint = self._outdir_change = self._outdir_reset = None
         self._model_hint = self._device_hint = self._cores_hint = None
         if win is not None and win.winfo_exists():
             win.destroy()
@@ -6909,6 +7095,12 @@ class App(tk.Tk):
         # 放開釘死的那顆開關。
         if self._honor_check is not None:
             self._honor_check.configure(state="disabled" if busy else "normal")
+        # ⚠️ **存放位置也鎖**:錄音與轉檔在開始那一刻就定好存哪了,中途按得動卻不生效。
+        # 「恢復預設」多一個條件:已經是預設就沒有東西可恢復
+        if self._outdir_change is not None:
+            self._outdir_change.configure(state="disabled" if busy else "normal")
+            self._outdir_reset.configure(
+                state="disabled" if busy or outdir.custom() is None else "normal")
 
     def _llm_delete_ask(self, m: RowModel) -> None:
         """「刪除模型…」:問一次再刪;刪完那一列與「地端 AI」那一格的說明一起重寫。"""
@@ -7421,8 +7613,13 @@ class App(tk.Tk):
                           "err")
             return
         power.stay_awake_begin()      # ⚠️ 錄音中不得睡眠(收尾時解除)
+        # ⚠️ 存放位置在**開錄這一刻**定、也在這一刻試寫:隨身碟或雲端硬碟要是一小時後收尾
+        # 才發現寫不進去,錄音就只剩工作目錄裡那一份。退回預設那句話留到收尾完成時講
+        # (錄音中的狀態列每秒重寫,這時講會被蓋掉)。
+        out_dir, out_note = outdir.for_run()
         self._rec.update(recorder=recorder, live=live, dir=rec_dir, stem=stem,
-                         scene=scene_label, language=language)
+                         scene=scene_label, language=language,
+                         out=out_dir, out_note=f" {out_note}" if out_note else "")
         self._busy["rec"] = True
         # ⚠️ **錄音是唯一不經 `_run_lock` 的工作**,所以它的跑馬燈要自己點起來(清掉
         # 的那一側則共用:按下「停止錄音」會 `_run_lock(True)`,收尾結束時
@@ -7478,11 +7675,14 @@ class App(tk.Tk):
         # 的「錄了多久」也靠它——收尾期間拿現在的時間去減開錄時刻會越報越長。
         self._rec_t1 = time.monotonic()
         self._rec_say(REC_FINISHING, "busy")
-        live, out_dir, stem = (self._rec["live"], OUTPUT_DIR, self._rec["stem"])
+        live, out_dir, stem = (self._rec["live"], self._rec.get("out") or outdir.current(),
+                               self._rec["stem"])
         rec_dir = self._rec.get("dir")
         speakers = self._normalize_speakers(self._run_speakers.get())
         cores = self._run_cores.get()
         self._run_lock(True)
+        self._run_dirs = [str(out_dir)]     # 要在 `_run_lock(True)` 之後,它會歸零
+        self._run_out_note = self._rec.get("out_note", "")
         self._run_bar.configure(value=0)
         self._rec_salvaged = None
 
@@ -7591,8 +7791,7 @@ class App(tk.Tk):
         self._run_bar.configure(value=0)
         if error is None:
             self._rec_say(t("收尾完成,逐字稿在下面。"), "ok")
-            self._stage(t("完成。"))
-            self._run_open.configure(state="normal")
+            self._stage(t("完成。") + self._run_out_note)
         elif isinstance(error, Cancelled):
             # ⚠️ **自己按的「中止收尾」不是出錯**(2026-09-15 補):先前這裡沒有這一支,
             # `Cancelled` 落到最後的兜底——畫面寫「收尾時出錯」、記錄檔多一段堆疊,而
@@ -7973,7 +8172,8 @@ class App(tk.Tk):
             src = (Path(wav) if wav
                    else relabel.find_media(Path(md)) if md else None)
         self._run_set_preview(f"{RESTORED_NOTE}\n\n{data['preview']}")
-        self._run_open.configure(state="normal")
+        # ⚠️ 接回來的那一份可能在**舊的**存放位置(之後才改過設定),要開它所在的資料夾
+        self._run_dirs = [str(Path(outputs[0]).parent)]
         self._naming_show(
             SimpleNamespace(outputs=outputs, speakers=data["count"],
                             speaker_hints=data["hints"],
@@ -8904,6 +9104,7 @@ class App(tk.Tk):
         if running:
             self._taskbar(None)
             self._run_dirs = None       # 這一趟的成品位置由這一趟自己說
+            self._run_out_note = ""     # 「指定的存放位置寫不進去」那句也是
             self._relabel_stage = ""    # 上一份的缺檔提示不得殘留到這一份
             self._minutes_jump_show(None)   # 收工捷徑指的是上一趟的成品
         else:
@@ -8925,7 +9126,7 @@ class App(tk.Tk):
         # 下來時畫面還掛著上一趟的「完成。」與亮著的「輸出資料夾…」。
         self._stage("")
         self._run_bar.configure(value=0)
-        self._run_open.configure(state="disabled")
+        self._run_dirs = None
         self._naming_hide()
         busy = self._busy_reason("run")
         if busy:
@@ -8944,6 +9145,11 @@ class App(tk.Tk):
             return
         cancel.reset()
         self._run_lock(True)
+        # ⚠️ 存放位置在**按下開始的這一刻**定(同其他參數):指定的寫不進去就退回預設,
+        # 那句話留到「完成。」後面講——開始時講會被進度蓋掉
+        out_dir, note = outdir.for_run()
+        self._run_out_note = f" {note}" if note else ""
+        self._run_dirs = [str(out_dir)]     # 要在 `_run_lock(True)` 之後,它會歸零
         self._stage(t("{name}:準備中…", name=src.name))
         self._run_set_preview("")
         # ⚠️ 值要在主執行緒先讀好(同文件分頁那條:Tk 不是執行緒安全的)
@@ -8957,7 +9163,7 @@ class App(tk.Tk):
             # 是因為有變動時會收掉轉錄子行程,那一下不該卡住視窗
             pipeline.apply_worker_count(cores)
             result = run_pipeline(
-                src, OUTPUT_DIR, model_key=model_key, num_speakers=speakers,
+                src, out_dir, model_key=model_key, num_speakers=speakers,
                 language=language,
                 on_stage=lambda stage, frac: say(
                     ("run_stage", (f"{src.name}:{stage}", frac))),
@@ -9047,10 +9253,7 @@ class App(tk.Tk):
         self._run_lock(False, flag)
         self._run_bar.configure(value=0)
         if error is None:
-            self._stage(t("完成。"))
-            # 批次一個都沒轉出來(全部略過)就沒有資料夾可開;None 是單檔那條 = output
-            self._run_open.configure(
-                state="disabled" if self._run_dirs == [] else "normal")
+            self._stage(t("完成。") + self._run_out_note)
         elif isinstance(error, Cancelled):
             # 半成品已由 pipeline 自己清掉(批次那條:已完成的檔案留著,報告在預覽裡)
             self._stage(t("已依要求停止,本檔案尚未轉完。"))
@@ -10500,7 +10703,7 @@ class App(tk.Tk):
             tracks = [t for t in tracks if Path(t.path).exists()]
             if not tracks:
                 return                           # 等的時候收尾做完了(工作目錄已刪)
-        live_scribe.salvage_tracks(tracks, OUTPUT_DIR, stem)
+        live_scribe.salvage_tracks(tracks, self._rec.get("out") or outdir.current(), stem)
 
     # ---- 切頁 ----------------------------------------------------------- #
     def _show(self, key: str) -> None:
@@ -10587,6 +10790,10 @@ def main() -> None:
     # 幾 GB 的資料;它照樣找得到——`paths.appdata_root()` 在新位置還不存在時
     # 會回舊的。⚠️ **要在 `filelog.start()` 之後**:搬移要留得下記錄。
     paths_mod.migrate_legacy_appdata()
+    # ⚠️ **逐字稿與錄音檔也只在這條路搬**(2026-11-09,理由同上):Mac 的舊位置在
+    # `~/Library` 底下、Finder 預設看不到;要在上一行之後(工具資料夾搬好了,
+    # `repo_root` 之外的命名進度才在新位置,`pending.relocate` 改得到)。
+    outdir.migrate_legacy()
     # ⚠️ **入口 2026-10-22 改成英文檔名**,而換版不刪舊檔:舊版更新上來的副本在這裡把捷徑
     # 改指 `Launch.vbs`、刪掉中文檔名的舊入口。⚠️ **背景做**:寫捷徑要起 COM,不擋開窗。
     import threading

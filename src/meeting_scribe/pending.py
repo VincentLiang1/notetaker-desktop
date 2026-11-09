@@ -198,6 +198,34 @@ def rename_draft(old: str, new: str) -> None:
         logger.exception("命名草稿改名失敗(草稿裡可能留著舊名字)")
 
 
+def relocate(old, new) -> None:
+    """成品資料夾整個搬家時(`outdir.migrate_legacy`),把落地裡指著舊資料夾的路徑一起換掉。
+
+    ⚠️ **不做的話搬家那一刻就把未完成的命名丟了**:`load` 看到成品「不存在」會整包清掉,
+    而那是一份轉了半小時、還沒套用名字的會議。只換 `outputs` 與核對的音檔來源——試聽片段
+    是 `persist` 複製進 pending 目錄的副本,不在成品資料夾裡。"""
+    meta_file = pending_dir() / "meta.json"
+    if not meta_file.exists():
+        return
+    old, new = Path(old), Path(new)
+
+    def moved(p: str) -> str:
+        try:
+            return str(new / Path(p).relative_to(old))
+        except ValueError:
+            return p
+
+    try:
+        meta = json.loads(meta_file.read_text(encoding="utf-8"))
+        meta["outputs"] = [moved(p) for p in meta.get("outputs", [])]
+        audit = meta.get("audit")
+        if isinstance(audit, dict) and audit.get("src"):
+            audit["src"] = moved(audit["src"])
+        meta_file.write_text(json.dumps(meta, ensure_ascii=False), encoding="utf-8")
+    except Exception:
+        logger.exception("命名進度的路徑沒跟著搬(重開後可能接不回這一份命名)")
+
+
 def update_names(names: dict[int, str]) -> None:
     """整份覆寫落地的草稿名字({講者標籤: 名字});沒有落地資料
     (套用後/從未轉檔)就略過。失敗只記 log:草稿是便利功能,

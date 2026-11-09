@@ -107,6 +107,11 @@ def desktop_dir():
     return desk if desk.is_dir() else home
 
 
+def default_output_parent():
+    """不知道這個平台的慣例,照舊放在工具資料夾裡。"""
+    return None
+
+
 def start_menu_programs_dir():
     """不知道這個平台有沒有這種東西。"""
     return None

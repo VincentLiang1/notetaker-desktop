@@ -52,6 +52,9 @@ KEY_MINUTES_FIVE = "minutes_five_sections"
 # 所以落地(使用者 2026-10-21 選:頁首 🌐 選單、重開生效)。⚠️ 不是「會議語言」——那是每一份
 # 工作各自選、不記住的,見 `docs/dev/i18n.md`。
 KEY_UI_LANGUAGE = "ui_language"
+# 逐字稿與錄音檔的存放位置(`outdir.custom`;沒有這個鍵或值是 null = 用預設)。描述的是**這台
+# 電腦的檔案放哪**,所以落地(使用者 2026-11-09:朋友要拿錄音檔與 md,而 Mac 的預設藏在 Library)
+KEY_OUTPUT_DIR = "output_dir"
 
 
 def store_file() -> Path:

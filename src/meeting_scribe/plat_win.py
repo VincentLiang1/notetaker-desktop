@@ -274,6 +274,11 @@ def desktop_dir():
                  if p.is_dir()), home)
 
 
+def default_output_parent():
+    """`None`:預設照舊放在工具資料夾的 `output`(使用者自己解壓的位置,本來就看得到)。"""
+    return None
+
+
 def start_menu_programs_dir():
     r"""這個使用者的「開始功能表\程式集」;問不到才退回 `%APPDATA%` 那條。
 

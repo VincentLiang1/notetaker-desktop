@@ -909,5 +909,14 @@
  "新版放不上去,原本的 App 也搬不回去,它現在在:{backup} 請把它拖回「應用程式」資料夾,或到下載頁重新下載。": "The new version couldn't be put in place, and the previous app couldn't be moved back either. It is now at {backup}. Drag it back into the Applications folder, or download it again from the download page.",
  "新版打不開,已還原成原本的版本。可以到下載頁手動更新。": "The new version wouldn't open, so the previous version was restored. You can update by hand from the download page.",
  "新版打不開,原本的 App 也搬不回去,它現在在:{backup} 請把它拖回「應用程式」資料夾,或到下載頁重新下載。": "The new version wouldn't open, and the previous app couldn't be moved back either. It is now at {backup}. Drag it back into the Applications folder, or download it again from the download page.",
- "這份逐字稿是較新版本的程式產生的(格式 {n}),這一版讀不懂。請先把這個工具更新到最新版再開。": "This transcript was made by a newer version of the app (format {n}), which this version can't read. Update the app to the latest version, then open it again."
+ "這份逐字稿是較新版本的程式產生的(格式 {n}),這一版讀不懂。請先把這個工具更新到最新版再開。": "This transcript was made by a newer version of the app (format {n}), which this version can't read. Update the app to the latest version, then open it again.",
+ "存放位置": "Save location",
+ "存放位置:{v}": "Save location: {v}",
+ "存放位置「{v}」寫不進去,這一趟改存到「{d}」。": "Couldn't write to the save location \"{v}\", so this run was saved to \"{d}\".",
+ "恢復預設": "Reset",
+ "變更…": "Change…",
+ "這一趟的成品在 {n} 個資料夾": "This run's files are in {n} folders",
+ "這一趟的成品在:{v}": "This run's files are in: {v}",
+ "這個資料夾寫不進去,請換一個": "Can't write to this folder. Please choose another.",
+ "選擇逐字稿與錄音檔的存放位置": "Choose where to save transcripts and recordings"
 }

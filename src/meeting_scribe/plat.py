@@ -426,6 +426,16 @@ def desktop_dir():
     return _impl().desktop_dir()
 
 
+def default_output_parent():
+    r"""逐字稿與錄音檔的**預設**存放位置要放在哪一層底下;`None` = 放在工具自己的資料夾裡。
+
+    ⚠️ **這是兩個平台真的不一樣的地方**(2026-11-09 使用者:「Windows 沒有這個問題」):
+    Windows 的工具資料夾是使用者自己解壓的、看得到,`output` 放在它底下就找得到;Mac 的
+    程式本體在 `~/Library/Application Support` 底下,而 Finder **預設不顯示 `~/Library`**
+    ——同仁轉完找不到檔案。資料夾叫什麼由 `outdir` 決定(要照介面語言),這裡只回上層。"""
+    return _impl().default_output_parent()
+
+
 def start_menu_programs_dir():
     """「開始功能表\程式集」;`None` = **這台機器沒有這個東西**,不是失敗。
 
