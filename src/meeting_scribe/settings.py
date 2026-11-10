@@ -55,6 +55,9 @@ KEY_UI_LANGUAGE = "ui_language"
 # 逐字稿與錄音檔的存放位置(`outdir.custom`;沒有這個鍵或值是 null = 用預設)。描述的是**這台
 # 電腦的檔案放哪**,所以落地(使用者 2026-11-09:朋友要拿錄音檔與 md,而 Mac 的預設藏在 Library)
 KEY_OUTPUT_DIR = "output_dir"
+# 「📤 送出」的送出資料夾(`sendbox.folder`;沒有這個鍵或值是 null = 不送出、沒有送出鈕)。描述的是
+# **這台電腦的逐字稿要送去哪**,所以落地(使用者 2026-11-10:仿照手機版的送出)
+KEY_SEND_DIR = "send_dir"
 
 
 def store_file() -> Path:

@@ -8,7 +8,7 @@
 
 📥 **下載(免費):[最新版](https://github.com/VincentLiang1/notetaker-desktop/releases/latest)** —— 點進去,在頁面下方的 `Assets` 區塊挑你的平台:**Windows 點 `notetaker-desktop-win.zip`、Mac 點 `notetaker-desktop-mac.zip`**。檔案不大是正常的(Windows 版 2MB 出頭、Mac 版約 30MB,多的是 App 內附的 Python),執行環境與 AI 模型都是第一次啟動時才自動下載(合計約 3～6GB,見第五章)。
 
-🔗 **搭配使用:** 手機 App「會議助手」可以現場錄音,聲紋與名單跟電腦版同步;再加上免費的 Wiki Agent(要一台常開的電腦與 Claude 付費帳號),錄完自動轉成文字、整理進你電腦上的 LLM Wiki 知識庫。整套怎麼搭配,見〈[會議助手全套服務架構](https://github.com/VincentLiang1/wiki-agent/blob/main/How-Notetaker-Fits-Together.zh-TW.md)〉。
+🔗 **搭配使用:** 手機 App「會議助手」可以現場錄音,聲紋與名單跟電腦版同步;再加上免費的 Wiki Agent(要一台常開的電腦與 Claude 付費帳號;可以就是裝電腦版的這一台,不需要另一套設備),錄完自動轉成文字、整理進你電腦上的 LLM Wiki 知識庫。整套怎麼搭配,見〈[會議助手全套服務架構](https://github.com/VincentLiang1/wiki-agent/blob/main/How-Notetaker-Fits-Together.zh-TW.md)〉。
 
 ![聲音→MD:現場收音或轉現成的錄音錄影,做成含講者分離的繁體中文逐字稿](docs/screenshot-audio.png)
 
@@ -168,6 +168,7 @@ Mac 上另外要知道的:
 **🤖 把成品交給 AI**
 
 - 貼給 AI 之前先關掉「拿對話內容訓練模型」的設定(附設定截圖)
+- **送進 LLM Wiki**(搭配 Wiki Agent):在「⚙ 進階參數設定…」選好收件資料夾(例如 `_WikiBox`,本機或雲端硬碟都可以),命名完按「✈ 送至 LLM Wiki 自動攝入」就把逐字稿複製過去;收走之後顯示「LLM Wiki 已收件」
 - **會議紀錄草稿**:用這台電腦上的地端 AI 把逐字稿整理成跟雲端 AI 提示詞一樣的五段:會議摘要、主要議題、決議事項、待辦事項(附負責人與期限)、未決問題(附約略時間;不要決議與未決問題可以關回三段),逐字稿內容不離開這台電腦(Windows 用工具內建的模型,第一次用要下載約 2~3.4 GB,有 Intel 內顯、記憶體 16 GB 以上的電腦還可以改選 Google 的 Gemma 4 E4B(約 6.5 GB、比較慢);Mac 每場可選 Apple Intelligence,或工具內建的 Qwen 4B(阿里巴巴,待辦最準、第一次用要下載約 3 GB)、Gemma 4(Google,約 5.2 GB),這兩個需要記憶體 16 GB 以上;兩個平台都有「各模型比較」並排列出出處、大小與要等多久;填了自己的稱呼,提到你的整理在最上面的「與我相關」;打開聲紋同步、同步資料夾裡有名詞對照表時,整理前先更正聽錯的專有名詞);⚠️ **地端小模型能力有限,品質比不上雲端 AI**,只能當草稿,正式紀錄請對照逐字稿另行整理;存在工具自己的資料夾、不放在逐字稿旁邊
 
 **⚙️ 調準確度與速度**

@@ -57,7 +57,8 @@ DUPLICATE_SIM = 0.999
 KEY_DEVICE_ID = "vp_sync_device"
 KEY_FOLDER = "vp_sync_folder"
 
-# 送出資料夾的名字(手機版 08 §8.9)。電腦版沒有「送出資料夾」這項設定,所以只能認名字。
+# 送出資料夾的慣用名字(手機版 08 §8.9)。電腦版 2026-11-10 起也有「LLM Wiki 送出資料夾」這項設定
+# (`sendbox.folder`,`check_folder` 另外擋它);這個名字照樣認——別台選的送出資料夾這台不知道。
 SEND_FOLDER_NAME = "_wikibox"
 
 _LOCK = threading.RLock()
@@ -299,7 +300,7 @@ def _now_at() -> str:
 def check_folder(path) -> str | None:
     """這個資料夾能不能當同步資料夾;不行回一句給使用者看的話,可以回 None。
 
-    ⚠️ 擋三種:不存在/寫不進去、**在送出資料夾(`_WikiBox`)裡或包著它**(wiki-feeder 會把
+    ⚠️ 擋三種:不存在/寫不進去、**在送出資料夾(`_WikiBox`,或這台設定的 LLM Wiki 送出資料夾)裡或包著它**(wiki-feeder 會把
     聲紋與真名攝入 FWIKI)、**在 git repo 裡**(紀錄會被提交出去;這台的 data/ 就在 repo 裡)。"""
     try:
         p = Path(path).expanduser().resolve()
@@ -317,6 +318,14 @@ def check_folder(path) -> str | None:
                     "請在 OneDrive 另開一個專用的資料夾。"))
     except OSError:
         pass
+    # 使用者自己選的 LLM Wiki 送出資料夾(`sendbox`,2026-11-10)不一定叫 `_WikiBox`,
+    # 上面那兩道認名字的擋不到它。⚠️ 晚一步 import:`sendbox.check_folder` 也回頭問這裡
+    from meeting_scribe import sendbox
+
+    send = sendbox.folder()
+    if send is not None and sendbox.overlaps(p, send):
+        return (t("不能跟 LLM Wiki 送出資料夾重疊(同一個、在它底下或包著它):那裡的檔會被送進"
+                "知識庫,聲紋與真名就跟著進去了。請另開一個專用的資料夾。"))
     for up in (p, *p.parents):
         if (up / ".git").exists():
             return (t("這個資料夾在程式碼的版本控管(git)底下,紀錄會被一起提交出去。"

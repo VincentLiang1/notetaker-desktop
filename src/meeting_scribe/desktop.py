@@ -78,6 +78,7 @@ from meeting_scribe.errors import UserFacingError
 from meeting_scribe.brand import APP_TITLE
 from meeting_scribe.i18n import t
 from meeting_scribe import outdir
+from meeting_scribe import sendbox
 from meeting_scribe import paths as paths_mod
 from meeting_scribe.paths import appdata_root, assets_dir, repo_root
 from meeting_scribe.pipeline import run_pipeline
@@ -625,6 +626,24 @@ MINUTES_HINT = (t("挑一份轉好的 .md(建議先替講者命名),整理出摘
                 "⚠ 地端小模型,品質比不上雲端 AI,只能當草稿。"))
 # 命名收工之後右邊預覽卡上那顆捷徑(B 案的後半):帶入剛寫好的那份、直接開始
 MINUTES_SHORTCUT = t("✨ 用這份產生會議紀錄草稿")
+# 命名收工之後預覽框底下那顆「送至 LLM Wiki」(`sendbox.py`;使用者 2026-11-10 選 A 案)。
+# ⚠️ **不可以只寫「送出」**(使用者同日:「讓人不知道意思,因為本來就有檔案可以取得」):
+# 要講出送去哪、送了會怎樣。⚠️ 紙飛機是自己畫的(`DRAWN_MARKS`),造型同手機版那顆。
+SEND_BUTTON = t("✈ 送至 LLM Wiki 自動攝入")
+SEND_WAITING = t("✓ 已送至 LLM Wiki")
+SEND_COLLECTED = t("✓ LLM Wiki 已收件")
+SEND_TO = t("送到 {v}")
+SEND_SHORT_ASK = t("這份逐字稿內容很少(錄音不到 1 分鐘,或不到 100 字),還要送進 LLM Wiki 嗎?")
+SEND_RESEND_ASK = t("這份逐字稿上次送出的已經被 LLM Wiki 收走了,再送一次知識庫會多一份"
+                    "(舊的那份要到知識庫那邊處理)。還要送嗎?")
+SEND_ANYWAY = t("仍要送出")
+SEND_NOT_NOW = t("先不送")
+# 「進階參數設定」最後一列(2026-11-10 使用者看過設計稿)
+SEND_TITLE = t("LLM Wiki 送出資料夾")
+SEND_PICK = t("選擇…")
+SEND_OFF = t("不送出")
+SEND_UNSET = t("未設定(不送出)")
+SEND_PICK_TITLE = t("選擇 LLM Wiki 的送出資料夾(例如 _WikiBox)")
 # 「地端 AI」那一格的模型選擇(Mac;2026-10-14 使用者選案 A:膠囊二選一 ＋ 底下一行說明;
 # 只有一個能用時整排收起來,見 `minutes.choices`)。⚠️ 說明那一行是「選之前」唯一講得到
 # 「要下載 3 GB」與「比較慢」的地方,不可以為了省高度拿掉(量過:最窄視窗多 102 px、
@@ -1367,9 +1386,10 @@ def configure_styles(root: tk.Misc, fam: str, pal: dict) -> None:
 # Segoe UI Emoji 裡沒有彩色字形)。其餘開頭的符號(▶ ⏹ 🔍 🔀)是彩色 emoji,
 # `HandButton` 會畫成彩色圖片。⚠️ **四組主要動作鈕的記號一律走這兩個**(2026-09-12
 # 使用者指定:開始一律 ●、停止一律 ■),不可以改用 ⏹——那顆會被畫成藍色方塊。
-BUTTON_TEXT_MARKS = "●■★"
+BUTTON_TEXT_MARKS = "●■★✓"
 # ⚠️ **「★」也照文字畫**(2026-10-17 錄音中的「★ 重點」):它落在 `is_symbol` 那一段碼位,
 # 不擋的話會走彩色 emoji 那條路,而它在 emoji 字型裡沒有字形(Apple 的只有 ⭐)
+# ⚠️ **「✓」同理**(2026-11-10「✓ 已送至 LLM Wiki」):彩色那條會畫成一顆綠底方塊
 # 上面那兩個裡,**改成程式自己畫**的記號(加上暫停的「‖」;2026-10-07 使用者看實拍指出
 # 「左邊那個高度低了一點,右邊那個圖示下緣超過文字」)。逐像素量過:字型裡的「■」中線
 # 比中文字低 3.5 實體 px(@150%)、「‖」下緣多伸出 5 px——那是各字型自己的符號設計,
@@ -1377,7 +1397,10 @@ BUTTON_TEXT_MARKS = "●■★"
 # `App._mark_pil`。⚠️ **「●」不在這裡**:它在字型裡本來就是正中(量到 0.0),而且
 # 「開始一律 ●」那顆的大小使用者看慣了,沒有理由動。⚠️ 仍然**單色、跟著字色**
 # (`App.button_icon`),不是 emoji 那條彩色的路
-DRAWN_MARKS = "■‖"
+# ⚠️ **「✈」是紙飛機**(2026-11-10「送至 LLM Wiki」,使用者:「圖示也要跟手機相同」):手機用的是
+# SF Symbol `paperplane.fill`,但 SF Symbols 的授權只准用在 Apple 平台,而 Unicode 沒有紙飛機
+# ——所以照那個造型自己畫(`App._mark_pil`),「✈」只是鍵;畫不出來時退回這個字也看得懂
+DRAWN_MARKS = "■‖✈"
 
 
 @dataclass(frozen=True)
@@ -2069,6 +2092,15 @@ class App(tk.Tk):
         # 「進階參數設定」的「存放位置」那一列(對話框點了才建,見 `_adv_close`)
         self._outdir_hint: ttk.Label | None = None
         self._outdir_change = self._outdir_reset = None
+        # 同一扇的最後一列「LLM Wiki 送出資料夾」(同上,點了才建)
+        self._send_hint: ttk.Label | None = None
+        self._send_pick_btn = self._send_off_btn = None
+        # 命名收工之後預覽框底下那一列「送至 LLM Wiki」(轉檔頁建好之前是 None;見 `_send_show`)
+        self._send_row: ttk.Frame | None = None
+        self._send_btn: HandButton | None = None
+        self._send_where: ttk.Label | None = None
+        self._send_md: Path | None = None
+        self._send_poll: str | None = None   # 等收件時每 30 秒看一次的 after id
 
         self._styles()
         self._build_ui()
@@ -3383,6 +3415,22 @@ class App(tk.Tk):
         from PIL import Image, ImageDraw
 
         cjk = round(line * 0.62)                  # 中文字墨跡的高度
+        if char == "✈":
+            # 紙飛機:與中文字墨跡同高的正方形,機頭朝右上;兩片(上翼、機身)中間留一道摺縫
+            S = cjk * factor
+            im = Image.new("RGBA", ((cjk + gap) * factor, line * factor), (0, 0, 0, 0))
+            d = ImageDraw.Draw(im)
+            top = (line - cjk) / 2 * factor
+
+            def pt(x, y):
+                return (x * (S - 1), top + y * (S - 1))
+
+            tip, wing, fold, tail = pt(1, 0), pt(0, 0.43), pt(0.43, 0.57), pt(0.57, 1)
+            d.polygon([tip, wing, fold], fill=color)
+            d.polygon([tip, fold, tail], fill=color)
+            d.line([pt(0.96, 0.04), pt(0.47, 0.53)], fill=(0, 0, 0, 0),
+                   width=max(1, round(S * 0.07)))
+            return im
         sq = round(cjk * 0.55)                    # ■ 的邊長(與字型裡那顆同大)
         h = cjk if char == "‖" else sq
         w = round(h * 0.55) if char == "‖" else sq
@@ -5354,6 +5402,15 @@ class App(tk.Tk):
         HandButton(jump, text=MINUTES_SHORTCUT, style=skin.CTA_STYLE,
                    command=self._minutes_jump_go).pack(side="left")
         self._minutes_jump = jump
+        # 命名收工之後的「送至 LLM Wiki」(使用者 2026-11-10 選 A 案:預覽框正下方,跟上面那顆
+        # 捷徑分開;平常收著,有設定送出資料夾才出現,見 `_send_show`)
+        send = ttk.Frame(run, style="CardBody.TFrame")
+        self._send_btn = HandButton(send, text=SEND_BUTTON, style=skin.RUN_STYLE,
+                                    command=self._send_go)
+        self._send_btn.pack(side="left")
+        self._send_where = ttk.Label(send, text="", style="Hint.TLabel")
+        self._send_where.pack(side="left", padx=(self.px(SP_MD), 0))
+        self._send_row = send
         # 階段文字與進度條:**閒置時整組收起來**(2026-09-01,對齊網頁版的乾淨畫面)。
         # ⚠️ **不是刪掉**——原生版沒有黑視窗,第一次轉檔那 2-3 GB 的模型下載進度與長
         # 階段的心跳訊息**只剩這裡出得來**(`docs/dev/native-ui.md` §4,那是硬需求)。
@@ -6190,6 +6247,82 @@ class App(tk.Tk):
         self._minutes_set_path(str(md))
         self._minutes_start()
 
+    def _send_show(self, md: Path | None) -> None:
+        r"""「送至 LLM Wiki」那一列:給一份 md、而且設定了送出資料夾就放出來,否則收起來。
+
+        ⚠️ **排在預覽框底下**(`side="bottom"`、`before=` 預覽框):預覽框 `expand` 撐滿整張
+        卡,排在它後面的話一點高度都分不到——設計稿第一次拍就是這樣整列不見。"""
+        self._send_md = md
+        self._send_poll_stop()
+        if self._send_row is None:
+            return
+        if md is None or sendbox.folder() is None:
+            self._send_row.pack_forget()
+            return
+        self._send_refresh()
+        self._send_row.pack(side="bottom", fill="x", before=self._run_pwrap,
+                            pady=(self.px(SP_MD), 0))
+
+    def _send_refresh(self) -> None:
+        r"""照送出狀態換按鈕上的字(`sendbox.status`)。
+
+        - 沒送過、或送出之後又改過 → 「送至 LLM Wiki 自動攝入」(按得到)
+        - 送了、還在資料夾裡 → 「已送至 LLM Wiki」(灰),之後每 30 秒看一次收走了沒
+        - 被收走了 → 「LLM Wiki 已收件」(灰)——wiki-feeder 收件後會刪掉那份,不需要任何通訊
+        (同手機版「Mac 已收件」:有場次在等時 App 開著每 30 秒再看一次)"""
+        md, folder = self._send_md, sendbox.folder()
+        if md is None or folder is None or self._send_btn is None:
+            return
+        state = sendbox.status(md)
+        if state == sendbox.WAITING:
+            self._send_btn.configure(text=SEND_WAITING, state="disabled")
+            self._send_poll = self.after(30_000, self._send_tick)
+        elif state == sendbox.COLLECTED:
+            self._send_btn.configure(text=SEND_COLLECTED, state="disabled")
+        else:
+            self._send_btn.configure(text=SEND_BUTTON, state="normal")
+        self._send_where.configure(text=elide_path(
+            SEND_TO.format(v=outdir.display(folder)), self._send_where, self.px(ADV_TEXT_W)))
+
+    def _send_tick(self) -> None:
+        self._send_poll = None
+        self._send_refresh()
+
+    def _send_poll_stop(self) -> None:
+        if self._send_poll is not None:
+            self.after_cancel(self._send_poll)
+            self._send_poll = None
+
+    def _send_go(self) -> None:
+        r"""按下「送至 LLM Wiki 自動攝入」。
+
+        ⚠️ **兩種情況先問再送**(同手機版):上次送的已經被收走(再送知識庫就多一份——
+        wiki-feeder 以內容判重,改過名字就是新內容);第一次送而內容很少(多半是試錄)。
+        ⚠️ **送不出去講在畫面上**(`_stage`):Tk 會把按鈕 callback 的例外吞進記錄檔。"""
+        md = self._send_md
+        if md is None:
+            return
+        self._send_poll_stop()
+        state = sendbox.status(md)
+        if state in (sendbox.COLLECTED, sendbox.COLLECTED_CHANGED):
+            if not self._ask_close(SEND_RESEND_ASK, ok_text=SEND_ANYWAY,
+                                   cancel_text=SEND_NOT_NOW):
+                self._send_refresh()
+                return
+        elif state == sendbox.UNSENT and sendbox.too_little(md):
+            if not self._ask_close(SEND_SHORT_ASK, ok_text=SEND_ANYWAY,
+                                   cancel_text=SEND_NOT_NOW):
+                self._send_refresh()
+                return
+        try:
+            sendbox.send(md)
+        except UserFacingError as e:
+            self._stage(str(e))
+            self._send_refresh()
+            return
+        self._stage("")
+        self._send_refresh()
+
     def _minutes_start(self) -> None:
         r"""按下「產生草稿」。
 
@@ -6772,7 +6905,7 @@ class App(tk.Tk):
         # ——用不到的機器上冒出一列按了沒作用的控制項,就是一個那個平台看得到的文案變更。
         # (刪模型那幾列 2026-10-29 搬去「地端 AI 進階設定」,見 `_llm_adv_open`)
         has_honor = live_scribe.guardrail_applies()
-        rows = 4 + has_honor
+        rows = 5 + has_honor
 
         def section(n: int, title: str, hint: str, build):
             r"""一列:左邊小標＋一行說明,右邊控制項;段與段之間一條細線。
@@ -6867,7 +7000,7 @@ class App(tk.Tk):
                     style="Card.TCheckbutton", command=self._adv_sync)
                 self._honor_check.pack(fill="x")
 
-            section(rows - 2, HONOR_TITLE, HONOR_INFO, honor)
+            section(rows - 3, HONOR_TITLE, HONOR_INFO, honor)
 
         # ---- 存放位置 ------------------------------------------------------ #
         # (2026-11-09 使用者:朋友要拿錄音檔與 md;選甲案「變更…」「恢復預設」兩顆並排。)
@@ -6888,8 +7021,23 @@ class App(tk.Tk):
             self._outdir_reset.pack(side="left", fill="x", expand=True,
                                     padx=(self.px(SP_XS), 0))
 
-        self._outdir_hint = section(rows - 1, OUTDIR_TITLE, "", place)
+        self._outdir_hint = section(rows - 2, OUTDIR_TITLE, "", place)
         self._outdir_show()
+
+        # ---- LLM Wiki 送出資料夾 ----------------------------------------- #
+        # (2026-11-10 使用者:仿照手機版的送出;看過設計稿,版型同上面那列。)
+        # ⚠️ 選了才有「送至 LLM Wiki」那顆鈕(`_send_show`);說明那一行同樣放路徑、不能折。
+        def sendto(parent):
+            self._send_pick_btn = HandButton(parent, text=SEND_PICK, style=skin.SKIP_STYLE,
+                                             command=self._send_pick)
+            self._send_pick_btn.pack(side="left", fill="x", expand=True)
+            self._send_off_btn = HandButton(parent, text=SEND_OFF, style=skin.SKIP_STYLE,
+                                            command=self._send_off)
+            self._send_off_btn.pack(side="left", fill="x", expand=True,
+                                    padx=(self.px(SP_XS), 0))
+
+        self._send_hint = section(rows - 1, SEND_TITLE, "", sendto)
+        self._send_folder_show()
 
         bar = ttk.Frame(pad, style="Page.TFrame")
         bar.pack(fill="x", pady=(self.px(CARD_GAP), 0))
@@ -6953,6 +7101,57 @@ class App(tk.Tk):
         logger.info("存放位置恢復預設:%s", outdir.current())
         self._outdir_show()
 
+    def _send_folder_show(self) -> None:
+        """把「LLM Wiki 送出資料夾」那一列的路徑重寫一次(太長縮中間,同 `_outdir_show`)。"""
+        if self._send_hint is None:
+            return
+        folder = sendbox.folder()
+        text = (SEND_UNSET if folder is None else
+                elide_path(outdir.display(folder), self._send_hint, self.px(ADV_TEXT_W)))
+        self._send_hint.configure(text=text)
+        self._adv_lock()
+
+    def _send_pick(self) -> None:
+        r"""「選擇…」:挑一個資料夾,當場檢查(`sendbox.check_folder`),過了才記住。
+
+        ⚠️ **面板掛主視窗、選的時候先收起對話框**(理由同 `_outdir_pick`)。
+        ⚠️ **不能用的原因講在一扇確認框裡**,不寫進說明那一行:那一行不能折,而「跟存放位置
+        重疊」「跟聲紋同步資料夾重疊」這幾句一行放不下。"""
+        if self._params_busy():
+            return
+        current = sendbox.folder()
+        win = self._adv_win
+        if win is not None:
+            win.withdraw()
+        try:
+            picked = srcfile.native_dialog(lambda fd, root: fd.askdirectory(
+                parent=root, title=SEND_PICK_TITLE, mustexist=True,
+                **({"initialdir": str(current)} if current and current.is_dir() else {})),
+                self)
+        finally:
+            if win is not None and win.winfo_exists():
+                win.deiconify()
+                win.lift()
+        if not picked:
+            return
+        why = sendbox.choose(picked)
+        if why is not None:
+            logger.warning("挑的 LLM Wiki 送出資料夾不能用:%s", picked)
+            self._ask_close(why, ok_text=t("知道了"), cancel_text=None)
+            return
+        logger.info("LLM Wiki 送出資料夾改成 %s", sendbox.folder())
+        self._send_folder_show()
+        self._send_show(self._send_md)
+
+    def _send_off(self) -> None:
+        """「不送出」:清掉送出資料夾,「送至 LLM Wiki」那顆鈕跟著收起來。"""
+        if self._params_busy():
+            return
+        sendbox.reset()
+        logger.info("LLM Wiki 送出資料夾已清除")
+        self._send_folder_show()
+        self._send_show(self._send_md)
+
     def _adv_place(self, win: tk.Toplevel) -> None:
         r"""把對話框擺在主視窗中央偏上;主視窗還沒 map(測試)就不擺。
 
@@ -6987,6 +7186,7 @@ class App(tk.Tk):
         self._cores_spin = None
         self._honor_check = None
         self._outdir_hint = self._outdir_change = self._outdir_reset = None
+        self._send_hint = self._send_pick_btn = self._send_off_btn = None
         self._model_hint = self._device_hint = self._cores_hint = None
         if win is not None and win.winfo_exists():
             win.destroy()
@@ -7101,6 +7301,12 @@ class App(tk.Tk):
             self._outdir_change.configure(state="disabled" if busy else "normal")
             self._outdir_reset.configure(
                 state="disabled" if busy or outdir.custom() is None else "normal")
+        # 送出資料夾跟著一起鎖(這扇的規矩是「工作進行中卡片裡每一個控制項都停用」);
+        # 「不送出」同上多一個條件:本來就沒設定
+        if self._send_pick_btn is not None:
+            self._send_pick_btn.configure(state="disabled" if busy else "normal")
+            self._send_off_btn.configure(
+                state="disabled" if busy or sendbox.folder() is None else "normal")
 
     def _llm_delete_ask(self, m: RowModel) -> None:
         """「刪除模型…」:問一次再刪;刪完那一列與「地端 AI」那一格的說明一起重寫。"""
@@ -8341,6 +8547,9 @@ class App(tk.Tk):
         if not self._busy["rec"]:
             self._rec_say(REC_IDLE, "wait")
         self._minutes_jump_show(mds[0] if len(mds) == 1 else None)
+        # ⚠️ **只有一份才給送出**(使用者 2026-11-10 選「只限單一檔案」);套用與跳過都算收工
+        # (手機版:命名沒做完也可以送,未命名的照「講者 N」)
+        self._send_show(mds[0] if len(mds) == 1 else None)
 
     def _naming_skip(self) -> None:
         """「跳過命名」(使用者指定 2026-07-24:有時不想改名):成品**不**刪,只清畫面
@@ -9107,6 +9316,7 @@ class App(tk.Tk):
             self._run_out_note = ""     # 「指定的存放位置寫不進去」那句也是
             self._relabel_stage = ""    # 上一份的缺檔提示不得殘留到這一份
             self._minutes_jump_show(None)   # 收工捷徑指的是上一趟的成品
+            self._send_show(None)           # 「送至 LLM Wiki」也是
         else:
             self._taskbar_end(outcome)
         # ⚠️ **收工時要清 `_stopping`**:不清的話下一趟一開跑,那顆鈕就直接是灰的
