@@ -197,7 +197,9 @@ ICON_PATH = assets_dir() / "icon.ico"
 ICON_PNG_PATH = assets_dir() / "png" / "icon-512.png"
 
 # 頁首那顆程式圖示的字級(跟著大標的字級走,見 `_brand_image`)。
-BRAND_ICON_PT = 20
+# ⚠️ **比大標(22)大是刻意的**(2026-11-10 使用者兩次要求放大):圖示上半部是星星、
+# 泡泡只佔下面七成,與大標同高的話泡泡比字還矮。圖已是去掉白底的透明版(`mark-256.png`)。
+BRAND_ICON_PT = 32
 
 # 頁首的第二行。⚠️ **與網頁版同一句**(`app.build_ui` 的 `#app-header`),搬過來時
 # 只動了兩處:拿掉 Markdown 的 `#` 標題記號(Tk 不渲染,會原樣印出來),以及把
@@ -3757,6 +3759,8 @@ class App(tk.Tk):
 
         ⚠️ **不要拿 `icon.ico` 直接餵 `tk.PhotoImage`**:Tk 8.6 讀得了 PNG 但讀不了
         ICO,而失敗是靜默的(圖示位置就是一片空白)。所以走 `assets/png` 那組。
+        ⚠️ **用的是透明版 `mark-256.png`、不是白底磚 `icon-256.png`**(後者留給
+        macOS 的 Dock,見 `scripts/make_icon.py`)。
         ⚠️ **縮放交給 Pillow**:`PhotoImage.subsample` 只能整數倍,150% 縮放要的
         尺寸它給不出來——硬用就是鋸齒。"""
         key = ("brand", pt)
@@ -3766,7 +3770,7 @@ class App(tk.Tk):
             from PIL import Image, ImageTk
 
             size = self.px(pt) * 4 // 3      # pt → px(同 `_icon_image`)
-            im = Image.open(assets_dir() / "png" / "icon-256.png").convert("RGBA")
+            im = Image.open(assets_dir() / "png" / "mark-256.png").convert("RGBA")
             im = im.resize((size, size), Image.LANCZOS)
             photo = ImageTk.PhotoImage(im)
         except Exception:

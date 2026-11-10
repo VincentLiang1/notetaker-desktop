@@ -23,12 +23,12 @@ description: 把 PDF / Word / PowerPoint / Excel / 掃描件 / 影像 / Outlook 
 "{{DOC2MD}}" "<檔案或資料夾>"
 ```
 
-這是 **Scribe2MD 的固定入口**:只裝了 Scribe2MD 核心、或裝了會議助手電腦版(它內含核心),都是這一個位置;兩份都裝時自動指向版本較新的那一份。
+這是 **Scribe2MD 的固定入口**:Wiki Agent 裝的 Scribe2MD 核心、或會議助手電腦版(它內含核心),都是這一個位置;兩份都裝時自動指向版本較新的那一份。
 
 > [!IMPORTANT]
 > **路徑外面那對雙引號不要拆掉,也不要把路徑改寫成反斜線。** Bash 工具是 POSIX shell,反斜線會被當成跳脫字元吃掉、路徑整條塌掉;路徑也可能含空格。指令根本沒跑到時是 `No such file or directory`(離開碼 127)或沒有任何「執行記錄:」那一行——那不是轉檔失敗,真的轉檔失敗一定伴隨檔名與原因,而且離開碼是 `1`。
 >
-> **找不到這個入口**(`No such file or directory`):核心沒裝、或裝好之後被移動過(venv 寫死絕對路徑,`meeting-scribe/core/` 不能搬)。請使用者重新安裝 Scribe2MD(或開一次會議助手電腦版,它會把入口指回來)。`"{{DOC2MD}}" --version` 印得出版號就代表入口是好的。
+> **找不到這個入口**(`No such file or directory`):核心沒裝、或裝好之後被移動過(venv 寫死絕對路徑,`meeting-scribe/core/` 不能搬)。請使用者開一次會議助手電腦版,它會把入口指回來;還沒裝的話請安裝會議助手電腦版(核心不單獨給人安裝,它是 Wiki Agent 自動安裝的元件)。`"{{DOC2MD}}" --version` 印得出版號就代表入口是好的。
 
 可以一次給多個路徑。常用選項:
 
