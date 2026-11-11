@@ -308,7 +308,7 @@ Mac 上另外要知道的:
 | winkit(窗口、皮肤、捷径的共用层;`winkit\` 子文件夹)/ sv-ttk(布景) | MIT |
 | FunASR CT-Transformer 标点模型(sherpa-onnx 转换) | Apache-2.0 |
 | pyannote segmentation-3.0(ONNX 转换) | MIT |
-| FFmpeg(经 static-ffmpeg,外部进程调用) | LGPL/GPL(不随本工具散布,安装时由你的电脑自行取得) |
+| FFmpeg(gyan.dev 8.0.1 essentials 版,外部进程调用) | GPL v3(Windows 下载包内附 `vendor/ffmpeg/ffmpeg.exe`,同一个文件夹里有授权条款与对应源代码的出处;其他情况由 static-ffmpeg 在第一次用到时取得) |
 | python-docx / python-pptx / openpyxl / markdownify / beautifulsoup4(文档转 Markdown) | MIT |
 | lxml / striprtf / charset-normalizer(文档转 Markdown) | BSD |
 | oletools / olefile(读 Excel 宏的大纲) | BSD |

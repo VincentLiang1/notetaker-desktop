@@ -102,6 +102,11 @@ def ffmpeg_path() -> str | None:
     (`--version --json` 不連網)。"""
     import importlib.util
 
+    # 交付版隨包附的那一份優先(同 `audio.bundled_ffmpeg`;⚠️ 不 import audio:它在模組層就拉
+    # numpy,而這裡是 `--version --json` 那條要快的路。位置兩邊一致由測試釘著)
+    bundled = paths.repo_root() / "vendor" / "ffmpeg" / plat.executable_name("ffmpeg")
+    if bundled.is_file():
+        return str(bundled)
     spec = importlib.util.find_spec("static_ffmpeg")
     if spec is None or not spec.origin:
         return None

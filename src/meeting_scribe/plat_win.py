@@ -564,9 +564,60 @@ def set_window_icon(window, ico_path, png_path):
     ⚠️ **不要「順手統一」成 `iconphoto`**:工作列那顆走的是另一條(見
     `desktop._apply_window_icon`),而這條路上 `.ico` 自帶多種尺寸,換成單一
     PNG 會讓小尺寸變成縮圖、糊一階。⚠️ **不吞例外**,理由見 `plat` 那一支。
-    ⚠️ 回 `None`:這條路沒有需要留著參照的東西。"""
+    ⚠️ 回 `None`:這條路沒有需要留著參照的東西。
+
+    ⚠️ **光靠 `iconbitmap` 工作列與標題列都是糊的**(2026-11-10 使用者回報、實測):
+    它只把**一張** 48×48 掛在視窗類別上(`GCLP_HICON` 與 `GCLP_HICONSM` 量到的都是
+    48),而 150% 下工作列要 36、標題列要 24——Windows 只好現場縮放,拍出來連
+    「Note」都糊成一團。ico 裡明明有那兩個尺寸的原圖,所以再用 `WM_SETICON` 把
+    **剛好尺寸**的兩張直接掛到視窗上(`_set_exact_icons`),同一台機器前後對照,
+    文字清楚可讀。"""
     window.iconbitmap(default=str(ico_path))
+    _set_exact_icons(window, ico_path)
     return None
+
+
+# 工作列與標題列在 100% 縮放下的圖示邊長(Windows 11:工作列 24、標題列 16),
+# 實際尺寸依視窗所在螢幕的 DPI 等比放大。⚠️ **大圖刻意不用 `SM_CXICON`(32)**:
+# 那是 Alt+Tab 的舊尺寸,150% 下是 48,工作列還是得 48→36 縮一次;使用者在意的是
+# 工作列那顆,而 36 是 `icon.ico` 裡有的原圖(`make_icon.ICO_SIZES`)。
+_TASKBAR_ICON_PT = 24
+_SMALL_ICON_PT = 16
+
+
+def _set_exact_icons(window, ico_path) -> None:
+    """依視窗的 DPI 從 ico 取出剛好尺寸的大小兩張,`WM_SETICON` 掛到視窗上。
+
+    ⚠️ **HWND 要取外層那一個**(`GetParent(winfo_id())`,理由見
+    `winkit.plat_win.window_handle`),而且要先 `update_idletasks` 它才存在。
+    ⚠️ **HICON 不釋放**:視窗活多久它就得活多久,一個行程兩顆,關窗時系統收回。
+    ⚠️ **純外觀,失敗就算了**:退回 `iconbitmap` 那張(糊但看得到)。
+    ⚠️ 換到倍率不同的另一台螢幕不會重抓(那時由 Windows 縮放,只是回到舊的糊度)。"""
+    try:
+        window.update_idletasks()
+        user32 = ctypes.windll.user32
+        user32.GetParent.restype = ctypes.c_void_p
+        user32.GetParent.argtypes = [ctypes.c_void_p]
+        hwnd = user32.GetParent(window.winfo_id())
+        if not hwnd:
+            return
+        user32.GetDpiForWindow.argtypes = [ctypes.c_void_p]
+        dpi = user32.GetDpiForWindow(hwnd) or 96
+        user32.LoadImageW.restype = ctypes.c_void_p
+        user32.LoadImageW.argtypes = [ctypes.c_void_p, ctypes.c_wchar_p, ctypes.c_uint,
+                                      ctypes.c_int, ctypes.c_int, ctypes.c_uint]
+        user32.SendMessageW.restype = ctypes.c_void_p
+        user32.SendMessageW.argtypes = [ctypes.c_void_p, ctypes.c_uint,
+                                        ctypes.c_void_p, ctypes.c_void_p]
+        IMAGE_ICON, LR_LOADFROMFILE, WM_SETICON = 1, 0x10, 0x80
+        for which, pt in ((1, _TASKBAR_ICON_PT), (0, _SMALL_ICON_PT)):   # ICON_BIG / ICON_SMALL
+            side = round(pt * dpi / 96)
+            hicon = user32.LoadImageW(None, str(ico_path), IMAGE_ICON, side, side,
+                                      LR_LOADFROMFILE)
+            if hicon:
+                user32.SendMessageW(hwnd, WM_SETICON, which, hicon)
+    except Exception:
+        logger.debug("視窗圖示換成精確尺寸失敗", exc_info=True)
 
 
 def migrate_dock() -> bool:

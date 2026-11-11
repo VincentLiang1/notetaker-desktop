@@ -23,6 +23,7 @@ r"""LibreOffice 的取得,以及舊格式的「升級器」。
 真的不需要提權仍未驗到底**——第一次跑到那一步時要盯著,失敗時的指路訊息
 (手動裝 LibreOffice / 用 Office 另存新格式)就是為此準備的。
 """
+import hashlib
 import logging
 import os
 import re
@@ -280,10 +281,49 @@ def _resolve_msi_url() -> str:
     )
 
 
+_SHA256_RE = re.compile(r"\s*([0-9a-fA-F]{64})\b")
+
+
+def _official_sha256(msi_url: str) -> str:
+    r"""TDF 官方給這個安裝檔的 SHA-256(同一個網址加 `.sha256`)。
+
+    ⚠️ **一定要從主站讀、不能信鏡像站**(2026-11-11 資安稽核):安裝檔本身會被主站轉到
+    第三方的鏡像站下載,而那個檔接著就交給 `msiexec` 解開、`soffice.exe` 被我們執行——
+    鏡像站被動過手腳,等於在使用者電腦上執行別人的程式。`.sha256` 由主站直接回(實測
+    不轉址),拿它比對,鏡像站就只是搬運工。讀不到、格式不對都不裝(寧可請使用者手動裝)。"""
+    def _read() -> str:
+        with urllib.request.urlopen(msi_url + ".sha256", timeout=30) as resp:
+            return resp.read(4096).decode("ascii", "replace")
+
+    try:
+        text = models.with_tls_rescue(_read, t("LibreOffice 安裝檔"))
+    except Exception as e:
+        logger.warning("讀不到 LibreOffice 安裝檔的官方檢查碼:%s", e)
+        text = ""
+    m = _SHA256_RE.match(text)
+    if not m:
+        raise UserFacingError(
+            t("讀不到 LibreOffice 安裝檔的官方檢查碼,為了安全沒有自動安裝。"
+              "請改用手動方式:到 https://zh-tw.libreoffice.org/ 下載安裝(免費),"
+              "裝好後再轉一次;或用 Word/Excel/PowerPoint 開啟後另存為新格式"
+              "(.docx/.xlsx/.pptx)。"))
+    return m.group(1).lower()
+
+
+def _sha256_of(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as f:
+        for block in iter(lambda: f.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
 def _download_and_install() -> Path:
     root = _install_root()
     url = _resolve_msi_url()
     msi = root / url.rsplit("/", 1)[-1]
+    # 先問檢查碼再下載:讀不到就不必讓人白等 370MB
+    want = _official_sha256(url)
     print(  # noqa: T201 - 黑視窗的進度回饋,同 models.download
         t("首次轉換舊版 Office 檔(副檔名沒有 x 的 doc/xls/ppt 等舊格式)需要下載 "
         "LibreOffice(約 370MB,只需一次);docx/xlsx/pptx 這類新格式不必下載。"
@@ -291,6 +331,14 @@ def _download_and_install() -> Path:
     )
     root.mkdir(parents=True, exist_ok=True)
     models.download(url, msi, min_bytes=_MIN_MSI_BYTES, what=t("LibreOffice 安裝檔"))
+    if _sha256_of(msi) != want:
+        # 刪掉:`models.download` 看到夠大的舊檔會直接沿用,不刪的話下一次還是這一份
+        msi.unlink(missing_ok=True)
+        logger.error("LibreOffice 安裝檔的 SHA-256 與官方不符:%s", url)
+        raise UserFacingError(
+            t("下載的 LibreOffice 安裝檔與官方檢查碼對不上(可能在下載途中損毀或被竄改),"
+              "為了安全沒有安裝。請再轉一次重新下載;一直失敗就改用手動方式:"
+              "到 https://zh-tw.libreoffice.org/ 下載安裝(免費)。"))
     try:
         _extract_msi(msi, root)
     finally:

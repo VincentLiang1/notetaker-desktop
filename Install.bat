@@ -50,7 +50,8 @@ if errorlevel 1 (
 )
 
 echo %M_SYNC%
-uv sync
+rem --frozen: install exactly what uv.lock pins, never re-resolve (same as the update helper)
+uv sync --frozen
 if errorlevel 1 (
     echo %M_SYNC_FAIL%
     pause

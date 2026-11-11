@@ -6,8 +6,9 @@
 - merge_stereo:雙軌錄音合成立體聲成品(左=麥克風、右=系統聲音)
 - read_wav16k:16k wav → float32 樣本(transcribe_ov/diarize 共用)
 
-ffmpeg 本體由 static_ffmpeg 提供,首次呼叫自動下載(約 50MB);三個
-轉檔函式共用 _run_ffmpeg(stderr 進 log、對使用者只拋繁中訊息)。
+ffmpeg 本體:交付版隨包附在 `vendor/ffmpeg/`(`scripts/package.py` 放的、釘了 SHA-256);
+沒有那一份(開發機、從公開 repo `git clone` 的人)才退回 static_ffmpeg 首次呼叫時下載。
+三個轉檔函式共用 _run_ffmpeg(stderr 進 log、對使用者只拋繁中訊息)。
 """
 import logging
 import subprocess
@@ -18,15 +19,32 @@ from pathlib import Path
 
 import numpy as np
 
-from meeting_scribe import plat
+from meeting_scribe import paths, plat
 from meeting_scribe.errors import UserFacingError
 from meeting_scribe.i18n import t
 
 logger = logging.getLogger(__name__)
 
 
+#: 交付版隨包附的 ffmpeg 所在(相對於專案根目錄)。⚠️ 與 `scripts/package.py` 的
+#: `FFMPEG_REL` 是同一個位置(測試釘著)
+BUNDLED_FFMPEG_DIR = ("vendor", "ffmpeg")
+
+
+def bundled_ffmpeg() -> Path | None:
+    r"""交付版隨包附的 ffmpeg;沒有就回 None。
+
+    ⚠️ **為什麼要隨包附**(2026-11-11 資安稽核,使用者選定):static_ffmpeg 是從某個人的
+    GitHub repo 的**可變分支**(`raw/main`)下載執行檔、不驗任何雜湊——那個 repo 被動過手腳,
+    每台電腦第一次轉錄時就會執行別人的程式;而且那一趟是隱私規格三種連網以外的第四種。
+    隨包附的這一份在打包時比對過釘死的 SHA-256(`package.FFMPEG_SHA256`)。"""
+    p = paths.repo_root().joinpath(*BUNDLED_FFMPEG_DIR, plat.executable_name("ffmpeg"))
+    return p if p.is_file() else None
+
+
 def ffmpeg_path() -> str:
-    r"""ffmpeg 執行檔的路徑(首次呼叫會下載平台版到 static_ffmpeg 套件目錄,約 50MB)。
+    r"""ffmpeg 執行檔的路徑:先用交付版隨包附的(`bundled_ffmpeg`),沒有才走 static_ffmpeg
+    (首次呼叫會下載平台版到它的套件目錄,約 50MB)。
 
     ⚠️ **`static_ffmpeg` 在這裡才 import,不在模組層**(2026-09-04 剖析啟動路徑時
     改的,同 sherpa / faster-whisper / OpenCC 那條惰性載入的慣例):它會一路拉進
@@ -35,6 +53,10 @@ def ffmpeg_path() -> str:
     (原生視窗、網頁介面、命令列)的啟動時間上,卻要等到真的轉檔才用得到。"""
     import contextlib
     import sys
+
+    found = bundled_ffmpeg()
+    if found is not None:
+        return str(found)
 
     from static_ffmpeg import run
 

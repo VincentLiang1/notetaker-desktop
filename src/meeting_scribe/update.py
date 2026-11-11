@@ -55,6 +55,13 @@ ZH_HEADING = "### 中文"
 WIN_ASSET = "notetaker-desktop-win.zip"
 #: ⚠️ 與 `scripts/release.py` 的 `MAC_ASSET` 是同一個名字(測試釘著)
 MAC_ASSET = "notetaker-desktop-mac.zip"
+#: Windows 自動更新用的「瘦」包:與 `WIN_ASSET` 同一份內容,只少了 `vendor/ffmpeg/ffmpeg.exe`(2026-11-11 使用者選定)。
+#: ⚠️ **為什麼**:ffmpeg 隨包附之後,完整包從約 3 MB 變成約 37 MB,而 ffmpeg 很少換版——每次更新都重抓
+#: 34 MB 是白費。換版小程式「只覆蓋、不刪檔」,所以瘦包裝上去之後舊的 ffmpeg 會留著;要不要換由
+#: `WIN_FFMPEG_ASSET` 的摘要決定(`_stage_ffmpeg`)。⚠️ **完整包照樣附**:手動下載安裝的人、以及還不認得
+#: 瘦包的舊版副本都只認 `WIN_ASSET`。⚠️ 兩個名字都與 `scripts/release.py` 的同名常數一致(測試釘著)
+WIN_UPDATE_ASSET = "notetaker-desktop-win-update.zip"
+WIN_FFMPEG_ASSET = "ffmpeg-win.exe"
 #: 舊 repo 的附檔名:**只有橋接版**用它發(已裝的舊版照這兩個名字找)
 LEGACY_WIN_ASSET = "scribe2md-win.zip"
 LEGACY_MAC_ASSET = "scribe2md-mac.zip"
@@ -84,6 +91,16 @@ _CHUNK = 256 * 1024
 NEVER_TOUCH = ("data", ".venv", "logs", "output", ".git")
 
 
+def protected(name: str) -> bool:
+    r"""這一層的名字是不是 `NEVER_TOUCH` 其中之一?
+
+    ⚠️ **不分大小寫、去掉尾巴的點與空白**(2026-11-11 資安稽核):Windows 的檔案系統把
+    `Data`、`DATA`、`data.`、`data ` 都當成同一個 `data` 資料夾,只比對原字串的話,一個寫成
+    `Data/voiceprints.npz` 的包照樣會蓋掉使用者的聲紋庫。⚠️ `update_helper.py` 有一份一模一樣的
+    (測試釘著兩邊判得一樣)。"""
+    return name.rstrip(" .").casefold() in NEVER_TOUCH
+
+
 @dataclass(frozen=True)
 class Release:
     """GitHub 上最新的那一版。"""
@@ -94,6 +111,10 @@ class Release:
     asset_url: str | None  # 這個平台的壓縮包的下載網址;沒附就是 None
     asset_size: int       # 位元組數(下載完要對得上)
     asset_sha256: str | None  # GitHub 給的摘要(有給才驗)
+    # 瘦包那條路才有(`WIN_UPDATE_ASSET`):Release 上那一份 ffmpeg.exe;本機那份摘要相同就不下載
+    ffmpeg_url: str | None = None
+    ffmpeg_sha256: str | None = None
+    ffmpeg_size: int = 0
 
 
 def current_version() -> str:
@@ -178,17 +199,30 @@ def fetch_latest(timeout: float = CHECK_TIMEOUT_SEC, asset_name: str | None = No
     tag = str(data.get("tag_name") or "")
     if parse_version(tag) is None:
         raise ValueError(t("GitHub 回的版號認不得:{tag!r}", tag=tag))
-    asset = next((a for a in data.get("assets") or []
-                  if asset_name and a.get("name") == asset_name), None)
-    digest = (asset or {}).get("digest") or ""
+    assets = {a.get("name"): a for a in data.get("assets") or [] if a.get("name")}
+    asset = assets.get(asset_name) if asset_name else None
+    ffmpeg: dict = {}
+    # 瘦包:Windows、而且 Release 同時附了瘦包與**帶摘要的** ffmpeg 才走(少一樣就照舊下載完整包——
+    # 沒有摘要就無從判斷本機那份要不要換,寧可多抓 34 MB)
+    slim, ff = assets.get(WIN_UPDATE_ASSET), assets.get(WIN_FFMPEG_ASSET)
+    if asset_name == WIN_ASSET and slim and ff and _digest(ff):
+        asset, ffmpeg = slim, {"ffmpeg_url": ff.get("browser_download_url"),
+                               "ffmpeg_sha256": _digest(ff), "ffmpeg_size": int(ff.get("size") or 0)}
     return Release(
         version=tag.lstrip("vV"),
         notes=notes_from_body(data.get("body")),
         page=str(data.get("html_url") or DOWNLOAD_PAGE),
         asset_url=(asset or {}).get("browser_download_url"),
         asset_size=int((asset or {}).get("size") or 0),
-        asset_sha256=digest[7:].lower() if digest.startswith("sha256:") else None,
+        asset_sha256=_digest(asset or {}),
+        **ffmpeg,
     )
+
+
+def _digest(asset: dict) -> str | None:
+    """GitHub 附檔的 `digest`(`sha256:…`)→ 小寫十六進位;沒給就 None。"""
+    digest = str(asset.get("digest") or "")
+    return digest[7:].lower() if digest.startswith("sha256:") else None
 
 
 def check(timeout: float = CHECK_TIMEOUT_SEC) -> tuple[Release | None, str | None]:
@@ -244,21 +278,26 @@ def download(rel: Release, dest: Path, progress=None,
     ⚠️ **自己寫迴圈,不用 `urlretrieve`**:那個停不下來,而這一趟要有「取消」。
     ⚠️ **大小與摘要都要對得上**:斷線時 urllib 不一定丟例外,只是檔案短了一截——
     那份 zip 解得開一半,換到一半才炸是最糟的時機。"""
-    from meeting_scribe import models
-
     if not rel.asset_url:
         raise ValueError(t("這一版沒有附這台電腦用的壓縮包"))
+    return _fetch(rel.asset_url, rel.asset_size, rel.asset_sha256, dest, progress, stop)
+
+
+def _fetch(url: str, size: int, sha256: str | None, dest: Path, progress=None,
+           stop: threading.Event | None = None) -> Path:
+    """下載一個附檔到 `dest`(大小與摘要有給就要對得上);`download` 與 `_stage_ffmpeg` 共用。"""
+    from meeting_scribe import models
+
     dest.parent.mkdir(parents=True, exist_ok=True)
     tmp = dest.with_suffix(dest.suffix + ".part")
 
     def fetch() -> None:
-        req = urllib.request.Request(rel.asset_url,
-                                     headers={"User-Agent": "scribe2md-update"})
+        req = urllib.request.Request(url, headers={"User-Agent": "scribe2md-update"})
         sha = hashlib.sha256()
         done = 0
         with urllib.request.urlopen(req, timeout=DOWNLOAD_TIMEOUT_SEC) as resp, \
                 open(tmp, "wb") as f:
-            total = int(resp.headers.get("Content-Length") or rel.asset_size or 0)
+            total = int(resp.headers.get("Content-Length") or size or 0)
             while True:
                 if stop is not None and stop.is_set():
                     raise UpdateCancelled()
@@ -273,9 +312,9 @@ def download(rel: Release, dest: Path, progress=None,
                         progress(done, total)
                     except Exception:  # noqa: BLE001 - 進度是 best-effort
                         logger.debug("更新下載的進度回報失敗", exc_info=True)
-        if rel.asset_size and done != rel.asset_size:
-            raise ValueError(t("下載不完整({done} / {asset_size} 位元組)", done=done, asset_size=rel.asset_size))
-        if rel.asset_sha256 and sha.hexdigest() != rel.asset_sha256:
+        if size and done != size:
+            raise ValueError(t("下載不完整({done} / {asset_size} 位元組)", done=done, asset_size=size))
+        if sha256 and sha.hexdigest() != sha256:
             raise ValueError(t("下載的檔案摘要對不上,可能在傳輸中損毀"))
 
     try:
@@ -305,7 +344,7 @@ def verify_zip(path: Path, version: str) -> None:
             if (not n.startswith(prefix) or ".." in parts or ":" in n
                     or n.startswith("/") or "\\" in n):
                 raise ValueError(t("壓縮包裡有不該出現的路徑:{n}", n=n))
-            if len(parts) > 2 and parts[1] in NEVER_TOUCH:
+            if len(parts) > 2 and protected(parts[1]):
                 raise ValueError(t("壓縮包裡帶著 {v} 資料夾,拒絕安裝", v=parts[1]))
         for need in ("pyproject.toml", "VERSION", "src/meeting_scribe/desktop.py"):
             if prefix + need not in names:
@@ -359,7 +398,7 @@ def verify_mac_zip(path: Path, version: str) -> None:
                 raise ValueError(t("壓縮包裡有不該出現的路徑:{n}", n=n))
             if n.startswith(payload):
                 inner = n[len(payload):].split("/")
-                if len(inner) > 1 and inner[0] in NEVER_TOUCH:
+                if len(inner) > 1 and protected(inner[0]):
                     raise ValueError(t("壓縮包裡帶著 {v} 資料夾,拒絕安裝", v=inner[0]))
         for need in ("Contents/Info.plist", "Contents/MacOS/"):
             if not any(n.startswith(prefix + need) for n in infos):
@@ -407,7 +446,39 @@ def prepare(rel: Release, progress=None, stop: threading.Event | None = None) ->
     zip_path = download(rel, base / "update.zip", progress, stop)
     staged = plat.stage_update(zip_path, rel.version, base / "staged")
     zip_path.unlink(missing_ok=True)
+    if rel.ffmpeg_url:
+        _stage_ffmpeg(rel, staged, progress, stop)
     return staged
+
+
+def local_ffmpeg() -> Path:
+    """這一份程式隨包附的 ffmpeg 所在(同 `audio.bundled_ffmpeg`;⚠️ 不 import audio,它在模組層拉 numpy)。"""
+    from meeting_scribe import plat
+
+    return paths.repo_root() / "vendor" / "ffmpeg" / plat.executable_name("ffmpeg")
+
+
+def _stage_ffmpeg(rel: Release, staged: Path, progress=None,
+                  stop: threading.Event | None = None) -> None:
+    r"""瘦包那條路:本機的 ffmpeg 與 Release 上那份摘要不同(或根本沒有)才下載,放進新版裡等著換上。
+
+    ⚠️ **摘要相同就什麼都不做**:換版小程式「只覆蓋、不刪檔」,本機那份會原封不動留著。
+    ⚠️ **下載的那份一定要對得上 Release 的摘要**(`_fetch` 驗),對不上整個更新失敗、不換。"""
+    mine = local_ffmpeg()
+    if mine.is_file() and _sha256_file(mine) == rel.ffmpeg_sha256:
+        logger.info("更新:ffmpeg 沒有換版,沿用本機那份")
+        return
+    logger.info("更新:ffmpeg 有新版(或本機沒有),一併下載")
+    _fetch(rel.ffmpeg_url, rel.ffmpeg_size, rel.ffmpeg_sha256,
+           staged / "vendor" / "ffmpeg" / mine.name, progress, stop)
+
+
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as f:
+        for block in iter(lambda: f.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
 
 
 #: 2026-10-22 之前的入口檔名(使用者:「支援多國語言,安裝檔案應該是英文檔名,目錄也不應該

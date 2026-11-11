@@ -1,4 +1,7 @@
 {
+ "附件「{name}」是可執行檔或含巨集的文件,為了安全沒有存出來": "The attachment “{name}” is a program or a document with macros, so for safety it wasn't saved",
+ "讀不到 LibreOffice 安裝檔的官方檢查碼,為了安全沒有自動安裝。請改用手動方式:到 https://zh-tw.libreoffice.org/ 下載安裝(免費),裝好後再轉一次;或用 Word/Excel/PowerPoint 開啟後另存為新格式(.docx/.xlsx/.pptx)。": "Couldn't read the official checksum for the LibreOffice installer, so for safety it wasn't installed automatically. Please install it yourself from https://www.libreoffice.org/ (free) and convert again, or open the file in Word/Excel/PowerPoint and save it in the new format (.docx/.xlsx/.pptx).",
+ "下載的 LibreOffice 安裝檔與官方檢查碼對不上(可能在下載途中損毀或被竄改),為了安全沒有安裝。請再轉一次重新下載;一直失敗就改用手動方式:到 https://zh-tw.libreoffice.org/ 下載安裝(免費)。": "The downloaded LibreOffice installer doesn't match the official checksum (it may have been damaged or tampered with on the way), so for safety it wasn't installed. Convert again to download it afresh; if it keeps failing, install it yourself from https://www.libreoffice.org/ (free).",
  "手機 App「會議助手」的電腦版:把聲音、文字、圖像轉換成適合 AI 閱讀的 Markdown(以節省 Token),聲紋與名單跟手機同步。\n全部在本機轉換,檔案不外傳;第一次使用請先看「使用說明」(首次轉檔需下載模型)。": "The desktop version of the Notetaker phone app: turns sound, text and images into Markdown that AI reads well (to save tokens).\nVoiceprints and names sync with your phone; everything is converted on this computer and no file leaves it. First time? Read Help first.",
  "📂 記錄檔…": "📂 Log…",
  "詳情見記錄檔(「❓ 使用說明」右上角的「記錄檔…」)": "see the log (“Log…” at the top right of “❓ Help”)",
@@ -256,6 +259,8 @@
  "表格中的跨欄/跨列儲存格已展開成重複值": "Table cells spanning several columns or rows were expanded into repeated values",
  "書名": "Title",
  "出版": "Publisher",
+ "電子書的「{name}」指到電子書以外的位置,沒有讀取": "The e-book entry “{name}” points outside the e-book, so it wasn't read",
+ "電子書「{name}」解開後超過 {gb} GB,不像正常的電子書,沒有轉換": "The e-book “{name}” would unpack to more than {gb} GB, which doesn't look like a normal e-book, so it wasn't converted",
  "電子書的「{name}」這一篇解析失敗,內容沒有取出": "The section “{name}” of the e-book couldn't be read, so its content wasn't extracted",
  "這本電子書沒有可讀的內文": "This e-book has no readable text",
  "先前已啟動失敗": "it already failed to start earlier",

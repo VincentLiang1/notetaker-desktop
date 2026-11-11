@@ -39,6 +39,28 @@ _MAX_ONE_ATTACHMENT = 512 * 1024**2
 
 _HEADER_KEYS = ("from", "to", "cc", "date", "subject")
 
+#: 不存出來的附件(使用者 2026-11-11 資安稽核時選定):可執行檔與帶巨集的 Office 文件。
+#: ⚠️ **理由是「來自網路」的標記**:郵件檔本身從信箱下載時帶著它,但我們存出來的附件不帶,
+#: 於是 Windows 的 SmartScreen 與 Office 的「受保護的檢視」都不會再攔——等於把一個本來
+#: 會被擋下的執行檔或巨集文件,換成一個雙擊就跑的檔案放進使用者的資料夾。帶巨集的文件
+#: **內容照樣轉出來**(文字是安全的),只是檔案本身不落地。
+_UNSAFE_ATTACHMENT_SUFFIXES = frozenset({
+    # Windows 可執行與腳本
+    ".exe", ".com", ".scr", ".pif", ".cpl", ".msi", ".msp", ".msc", ".dll", ".ocx", ".sys",
+    ".bat", ".cmd", ".ps1", ".psm1", ".psd1", ".vbs", ".vbe", ".js", ".jse", ".wsf", ".wsh",
+    ".hta", ".jar", ".reg", ".inf", ".lnk", ".url", ".scf", ".chm", ".appref-ms",
+    ".application", ".gadget", ".iso", ".img", ".vhd", ".vhdx",
+    # macOS
+    ".app", ".command", ".pkg", ".dmg", ".sh",
+    # 帶巨集的 Office 文件
+    ".docm", ".dotm", ".xlsm", ".xltm", ".xlam", ".pptm", ".potm", ".ppsm", ".ppam", ".sldm",
+})
+
+
+def unsafe_attachment(name: str) -> bool:
+    """這個附件(已經過 `docmd.sanitize_name`)是不是不該存出來的那一種?"""
+    return Path(name).suffix.lower() in _UNSAFE_ATTACHMENT_SUFFIXES
+
 
 def _header_label(key: str) -> str:
     """標頭欄位在 md 裡的名字(跟 `docmd.md_lang`)。
@@ -358,17 +380,23 @@ def _attachment_blocks(
             docmd.KIND_CYCLE,
         )]
 
-    link = assets.add_bytes(att.data, Path(name).suffix or ".bin", filename=name)
+    unsafe = unsafe_attachment(name)
+    link = "" if unsafe else assets.add_bytes(att.data, Path(name).suffix or ".bin", filename=name)
     blocks: list[Block] = [Heading(2, md_t("附件:{name}", name=name))]
     if link:
         blocks.append(Para(f"[{name}]({link})"))
+    if unsafe:
+        blocks.append(Note(
+            md_t("附件「{name}」是可執行檔或含巨集的文件,為了安全沒有存出來", name=name),
+            docmd.KIND_ATTACHMENT,
+        ))
 
     inner = _convert_attachment(
         att, name, assets, ocr_enabled, depth, seen | {digest}, budget,
     )
     if inner:
         blocks.extend(_shift_headings(inner, _ATTACHMENT_HEADING_SHIFT))
-    else:
+    elif not unsafe:
         blocks.append(Note(
             md_t("附件「{name}」不是可轉換的格式,已原樣存放", name=name), docmd.KIND_ATTACHMENT,
         ))

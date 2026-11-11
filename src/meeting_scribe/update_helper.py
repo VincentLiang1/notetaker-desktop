@@ -35,6 +35,16 @@ from pathlib import Path
 
 #: ⚠️ 與 `update.NEVER_TOUCH` 同一份(這支 import 不到那邊,測試釘著兩份一致)
 NEVER_TOUCH = ("data", ".venv", "logs", "output", ".git")
+
+
+def protected(name: str) -> bool:
+    r"""這一層的名字是不是 `NEVER_TOUCH` 其中之一?
+
+    ⚠️ **不分大小寫、去掉尾巴的點與空白**(2026-11-11 資安稽核):Windows 的檔案系統把
+    `Data`、`DATA`、`data.`、`data ` 都當成同一個 `data` 資料夾,只比對原字串的話,一個寫成
+    `Data/voiceprints.npz` 的包照樣會蓋掉使用者的聲紋庫。⚠️ `update.py` 有一份一模一樣的
+    (測試釘著兩邊判得一樣)。"""
+    return name.rstrip(" .").casefold() in NEVER_TOUCH
 TITLE = "會議助手電腦版"
 CREATE_NO_WINDOW = 0x08000000
 #: 本程式關掉要多久:收尾(保存錄音、停子行程)正常是一兩秒,給寬一點
@@ -122,7 +132,7 @@ def files_to_copy(staged: Path) -> list[Path]:
         if not p.is_file():
             continue
         rel = p.relative_to(staged)
-        if rel.parts[0] in NEVER_TOUCH:
+        if protected(rel.parts[0]):
             log(f"略過不可覆蓋的位置:{rel}")
             continue
         out.append(rel)

@@ -3553,7 +3553,8 @@ class App(tk.Tk):
     def _apply_window_icon(self) -> None:
         """標題列 / Alt+Tab(macOS 上是 Dock)的圖示。
 
-        ⚠️ **工作列那顆不歸這裡管**,它走的是另一條路而且有兩段:
+        ⚠️ **工作列那顆的「身分」不歸這裡管**(圖示的**清晰度**歸這裡:Windows 那條
+        另外用 `WM_SETICON` 掛剛好尺寸的圖,見 `plat_win._set_exact_icons`),身分有兩段:
         `winui.set_app_user_model_id()`(必須在建視窗**之前**呼叫)只把視窗歸到一個
         身分,那個身分的圖示登記在 `scripts/make_shortcut.py` 建的 .lnk 上——缺任一
         段,工作列上出現的就是啟動鏈上游那支執行檔的圖示。

@@ -24,3 +24,6 @@ diag/
 *.zip
 dist/
 VERSION
+
+# 隨交付版 zip 附的 ffmpeg(99 MB 執行檔):只在 Release 的 zip 裡,不進版本庫
+vendor/

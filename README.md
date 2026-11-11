@@ -312,7 +312,7 @@ License inventory of the components:
 | winkit (shared layer for windows, skins and shortcuts; the `winkit\` subfolder) / sv-ttk (theme) | MIT |
 | FunASR CT-Transformer punctuation model (converted by sherpa-onnx) | Apache-2.0 |
 | pyannote segmentation-3.0 (ONNX conversion) | MIT |
-| FFmpeg (via static-ffmpeg, called as an external program) | LGPL/GPL (not distributed with this tool; your computer obtains it at installation) |
+| FFmpeg (gyan.dev 8.0.1 essentials build, called as an external program) | GPL v3 (the Windows download ships `vendor/ffmpeg/ffmpeg.exe` together with its license and a link to the matching source code in that folder; elsewhere static-ffmpeg fetches it the first time it is needed) |
 | python-docx / python-pptx / openpyxl / markdownify / beautifulsoup4 (documents to Markdown) | MIT |
 | lxml / striprtf / charset-normalizer (documents to Markdown) | BSD |
 | oletools / olefile (reading the outline of Excel macros) | BSD |

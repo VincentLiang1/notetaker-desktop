@@ -214,12 +214,13 @@ def _table_rows(table_tag) -> tuple[list[list[str]], bool]:
 
 def _img_block(
     tag, assets: AssetsDir, resources: dict[str, bytes], base: Path,
-    ocr_enabled: bool = True,
+    ocr_enabled: bool = True, confine: Path | None = None,
 ) -> tuple[list[Block], bool]:
     """`<img>` / SVG 的 `<image>` → Image block。回傳 (blocks, 是否為未下載的遠端圖)。
 
     三種來源:mht 內嵌資源(已解出的位元組)、data: URI、本機相對路徑。
-    http(s) 一律不碰——隱私規格 spec §7。
+    http(s) 與網路芳鄰一律不碰——隱私規格 spec §7。本機檔只收真的是圖片的內容;
+    `confine` 有給(電子書的解壓目錄)時,位址還必須落在它底下。
 
     位址屬性有三種寫法:`<img src>`、SVG 1.1 的 `xlink:href`、SVG 2 的
     `href`(Calibre 匯出的電子書用後者)。bs4 對 `xlink:href` 給的鍵是
@@ -259,13 +260,54 @@ def _img_block(
         return _store(data, ext)
     if re.match(r"^[a-zA-Z][\w+.-]*:", src):  # http:/https:/ftp: … 一律不連外
         return [], True
-    local = (base / urllib.parse.unquote(src)).resolve()
+    rel = urllib.parse.unquote(src)
+    # ⚠️ **`//主機/分享`、`\\主機\分享` 是網路芳鄰**(2026-11-11 資安稽核):上面那條協定判斷
+    # 擋不到它們,而 `Path` 會把它們接成 UNC 路徑,`is_file()` 一問 Windows 就去連那台主機
+    # ——送出這台電腦的 NTLM 雜湊,也違反「網頁圖片一律不下載」。當成遠端圖、一律不碰。
+    if rel[:2] in ("//", "\\\\", "/\\", "\\/"):
+        return [], True
+    # 根目錄開頭(`/Users/…`)不是網頁該有的相對位址,只會是指向別處的本機檔
+    if rel[:1] in ("/", "\\"):
+        logger.debug("網頁圖片位址是根目錄路徑,略過:%s", src)
+        return [], False
+    local = (base / rel).resolve()
+    # 電子書:圖一定在書裡面,指到解壓目錄以外就是想讀這台電腦上別的檔案
+    if confine is not None and not local.is_relative_to(confine):
+        logger.debug("網頁圖片位址指到範圍以外,略過:%s", src)
+        return [], False
     try:
         if local.is_file() and local.stat().st_size < 64 * 1024 * 1024:
-            return _store(local.read_bytes(), local.suffix or ".png")
+            data = local.read_bytes()
+            # ⚠️ **內容必須真的是圖**:`../../` 是正常網頁會用的寫法,不能整個擋,但不驗內容的話
+            # 一個網頁就能把任意本機檔(文件、金鑰)抄進 .assets、跟著 md 一起被分享出去
+            if looks_like_image(data):
+                return _store(data, local.suffix or ".png")
+            logger.debug("網頁圖片位址指到的不是圖片,略過:%s", local)
     except OSError:
         logger.debug("本機圖片讀取失敗:%s", local, exc_info=True)
     return [], False
+
+
+def looks_like_image(data: bytes) -> bool:
+    """看檔頭判斷這是不是一張圖(網頁 `<img>` 讀本機檔時用,理由見 `_img_block`)。
+
+    寧寬勿漏:這裡要擋的是「文件、金鑰、文字檔被當成圖片抄出去」,所以認得的圖片格式
+    盡量列齊(含 SVG、HEIF/AVIF、Windows 的 EMF/WMF、JPEG 2000)。"""
+    head = data[:64]
+    if head.startswith((
+        b"\x89PNG\r\n\x1a\n", b"\xff\xd8\xff", b"GIF87a", b"GIF89a", b"BM",
+        b"II*\x00", b"MM\x00*", b"\x00\x00\x01\x00", b"\x00\x00\x02\x00",
+        b"\xd7\xcd\xc6\x9a", b"\x00\x00\x00\x0cjP  ", b"\xff\x4f\xff\x51",
+    )):
+        return True
+    if head[:4] == b"RIFF" and head[8:12] == b"WEBP":
+        return True
+    if head[4:8] == b"ftyp" and head[8:12] in (b"heic", b"heix", b"heif", b"mif1", b"msf1", b"avif"):
+        return True
+    if head[:4] == b"\x01\x00\x00\x00" and data[40:44] == b" EMF":
+        return True
+    text = data[:2048].lstrip(b"\xef\xbb\xbf \t\r\n").lower()
+    return text.startswith((b"<svg", b"<?xml")) and b"<svg" in text
 
 
 @dataclass
@@ -275,10 +317,13 @@ class _Embed:
     seen:已經列過的資料(指紋 → 第一次出現的頁名)。AI 做的簡報每一頁是
     一份獨立網頁,**共用的資料檔會在每一頁各嵌一次**——實測一份 12 頁的
     簡報,兩頁各嵌了同一批約 10 萬字的需求/設計文件,不去重的話 md 裡整份
-    出現兩次(RAG 會切出兩組一模一樣的 chunk)。"""
+    出現兩次(RAG 會切出兩組一模一樣的 chunk)。
+
+    root:本機圖片位址必須落在底下的目錄(電子書的解壓目錄;一般網頁是 None,見 `_img_block`)。"""
     depth: int = 0
     page: str = ""
     seen: dict[str, str] = field(default_factory=dict)
+    root: Path | None = None
 
 
 def _script_blocks(
@@ -301,7 +346,7 @@ def _script_blocks(
             )]
         # 每一頁一個標題:RAG 切塊後才知道這段出自哪一頁(render 規則 2)
         title = docmd.one_line(docscript.html_title(page) or label)
-        inner = _Embed(depth + 1, title, embed.seen)
+        inner = _Embed(depth + 1, title, embed.seen, embed.root)
         return [Heading(depth + 1, title)] + _html_blocks(
             page, assets, resources, base, ocr_enabled, inner,
         )
@@ -380,7 +425,7 @@ def _html_blocks(
             if rows:
                 blocks.append(Table(rows, has_header=True))
         elif name in ("img", "image"):
-            imgs, is_remote = _img_block(tag, assets, resources, base, ocr_enabled)
+            imgs, is_remote = _img_block(tag, assets, resources, base, ocr_enabled, embed.root)
             blocks.extend(imgs)
             remote += int(is_remote)
         elif name in ("h1", "h2", "h3", "h4", "h5", "h6"):
@@ -482,7 +527,9 @@ def _epub_spine(opf_xml: bytes, opf_dir: str) -> tuple[list[str], dict[str, str]
     for ref in soup.find_all("itemref"):
         href = manifest.get(ref.get("idref"))
         if href:
-            order.append(f"{opf_dir}{href}" if opf_dir else href)
+            # ⚠️ `/` 開頭的 href 不接 opf_dir:接成 `OEBPS//etc/…` 之後 pathlib 會把 `//` 摺掉、
+            # 變成書裡一個不存在的檔,`_epub_blocks` 的邊界檢查就攔不到——內容沒被讀,卻**無聲**略過
+            order.append(f"{opf_dir}{href}" if opf_dir and not href.startswith("/") else href)
     meta: dict[str, str] = {}
     for tag, label in (("title", md_t("書名")), ("creator", md_t("作者")),
                        ("publisher", md_t("出版")), ("date", md_t("日期"))):
@@ -491,6 +538,10 @@ def _epub_spine(opf_xml: bytes, opf_dir: str) -> tuple[list[str], dict[str, str]
         if text:
             meta[label] = text
     return order, meta
+
+
+#: epub 解開後的總大小上限。正常的電子書(含插圖)多在 100 MB 以內,留很寬的餘裕
+_EPUB_MAX_BYTES = 4 * 1024**3
 
 
 def convert_epub(src: Path, assets: AssetsDir, ocr_enabled: bool = True) -> list[Block]:
@@ -520,8 +571,14 @@ def convert_epub(src: Path, assets: AssetsDir, ocr_enabled: bool = True) -> list
                 prefix=pipeline.TMP_PREFIX + "epub-", ignore_cleanup_errors=True,
             ) as tmp:
                 root = Path(tmp)
+                # ⚠️ **解開之前先算總大小**(2026-11-11 資安稽核):幾 KB 的壓縮炸彈解開來是
+                # 幾十 GB,而且是解進系統磁碟的暫存資料夾——整台電腦一起沒空間
+                if sum(i.file_size for i in z.infolist()) > _EPUB_MAX_BYTES:
+                    raise UserFacingError(t(
+                        "電子書「{name}」解開後超過 {gb} GB,不像正常的電子書,沒有轉換",
+                        name=src.name, gb=_EPUB_MAX_BYTES // 1024**3))
                 z.extractall(root)
-                return _epub_blocks(root, order, meta, assets, ocr_enabled)
+                return _epub_blocks(root.resolve(), order, meta, assets, ocr_enabled)
     except UserFacingError:
         raise
     except Exception as e:
@@ -542,13 +599,23 @@ def _epub_blocks(
         colon = md_t(":")
         blocks.append(Para("\n".join(f"- {k}{colon}{v}" for k, v in meta.items())))
     for rel in order:
-        doc = root / rel
+        doc = (root / rel).resolve()
+        # ⚠️ **閱讀順序裡的路徑必須在書裡面**(2026-11-11 資安稽核):OPF 寫絕對路徑或
+        # `../../` 時,`root / rel` 會接到這台電腦上的任意檔案,內容就被當成一章抄進 md
+        if not doc.is_relative_to(root):
+            logger.warning("epub 的 spine 指到電子書以外的位置,不讀:%s", rel)
+            blocks.append(Note(
+                md_t("電子書的「{name}」指到電子書以外的位置,沒有讀取", name=rel),
+                docmd.KIND_EXTRACTION_GAP,
+            ))
+            continue
         if not doc.is_file():
             logger.debug("epub 的 spine 指到不存在的檔案:%s", rel)
             continue
         try:
             html, _ = _decode_html(doc.read_bytes())
-            blocks.extend(_html_blocks(html, assets, {}, doc.parent, ocr_enabled))
+            blocks.extend(_html_blocks(html, assets, {}, doc.parent, ocr_enabled,
+                                       _Embed(root=root)))
         except Exception:  # noqa: BLE001 - 一篇壞掉不該讓整本書轉不出來
             logger.info("epub 的 %s 解析失敗,略過", rel, exc_info=True)
             blocks.append(Note(

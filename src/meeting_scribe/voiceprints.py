@@ -24,7 +24,9 @@
 """
 
 import logging
+import pickle
 import uuid
+import zipfile
 from pathlib import Path
 from typing import NamedTuple
 
@@ -205,16 +207,58 @@ def _set_aside(f: Path) -> Path:
     return f
 
 
-def _read(f: Path, allow_pickle: bool) -> tuple[list[str], np.ndarray]:
-    """真的把兩個陣列取出來。
+def _read(f: Path) -> tuple[list[str], np.ndarray]:
+    """真的把兩個陣列取出來(新格式,**絕不開 allow_pickle**)。
 
     ⚠️ **一定要在這裡就取值、而且要 `with`**:`np.load` 對 npz 是**惰性**的
     ——它只開檔,「這是 pickle 而你沒開 allow_pickle」那個 ValueError 要等到
     `data["names"]` 才丟(2026-08-15 實測)。把取值留在外面的話,舊格式的檔
     會直接掉進「壞檔」那條路,而那條路會把使用者累積數月的聲紋庫搬走。
     `with` 則是為了關檔:handle 還開著時 `_set_aside` 的改名會被 Windows 擋。"""
-    with np.load(f, allow_pickle=allow_pickle) as data:
+    with np.load(f, allow_pickle=False) as data:
         return [str(n) for n in data["names"]], data["vecs"]
+
+
+class _LegacyNamesUnpickler(pickle.Unpickler):
+    """只認得「一個裝著字串的 numpy 陣列」的 Unpickler(讀 0.7.1 以前的舊格式用)。
+
+    ⚠️ **不可以換回 `allow_pickle=True`**(2026-11-11 資安稽核):pickle 讀檔就是執行
+    檔案裡寫的任意呼叫,而這個檔正是同仁之間私下互傳的那一個——實測做一份帶 payload
+    的 npz,舊寫法在工具開啟的當下就執行了它。舊格式的 names.npy 只會用到下面這四個
+    名字(numpy 陣列的重建函式、ndarray、dtype;字串本身是 pickle 的原生型別),
+    其他一律拒收,於是檔案再怎麼寫都叫不到 `os.system` 之類的東西。"""
+
+    _ALLOWED = frozenset({
+        ("numpy.core.multiarray", "_reconstruct"),
+        ("numpy._core.multiarray", "_reconstruct"),
+        ("numpy", "ndarray"),
+        ("numpy", "dtype"),
+    })
+
+    def find_class(self, module: str, name: str):
+        if (module, name) in self._ALLOWED:
+            return super().find_class(module, name)
+        raise pickle.UnpicklingError(f"舊格式聲紋庫裡出現不允許的型別:{module}.{name}")
+
+
+def _read_legacy(f: Path) -> tuple[list[str], np.ndarray]:
+    """讀舊格式(名字是 `dtype=object` 的 pickle):名字走 `_LegacyNamesUnpickler`、
+    向量照樣不開 pickle。名字裡只要有一個不是字串就整份不認(丟例外 → 壞檔那條路)。"""
+    with zipfile.ZipFile(f) as z:
+        with z.open("names.npy") as fh:
+            version = np.lib.format.read_magic(fh)
+            if version == (1, 0):
+                _shape, _order, dtype = np.lib.format.read_array_header_1_0(fh)
+            else:
+                _shape, _order, dtype = np.lib.format.read_array_header_2_0(fh)
+            if not dtype.hasobject:
+                raise ValueError("names.npy 不是舊格式")
+            arr = _LegacyNamesUnpickler(fh).load()
+        with z.open("vecs.npy") as fh:
+            vecs = np.lib.format.read_array(fh, allow_pickle=False)
+    if not isinstance(arr, np.ndarray) or not all(isinstance(n, str) for n in arr.tolist()):
+        raise ValueError("舊格式聲紋庫的名字不是字串陣列")
+    return list(arr.tolist()), vecs
 
 
 def load() -> tuple[list[str], np.ndarray]:
@@ -276,19 +320,20 @@ def _load_npz() -> tuple[list[str], np.ndarray]:
     「目前尚無登記任何聲紋」而不是打不開的網頁。
 
     ⚠️ **舊檔的名字是 pickle**(0.7.1 以前 `dtype=object` 存的),所以讀
-    法是「先用安全的方式試,失敗才退回 allow_pickle 並就地轉存成新格式」
-    ——同仁手上那些累積過的庫不能因為換格式就報廢,而轉存一次之後就不必
-    再開 pickle 了(見 `_save` 的 ⚠️)。"""
+    法是「先用安全的方式試,失敗才改走只認字串陣列的 `_read_legacy` 並就地轉存成
+    新格式」——同仁手上那些累積過的庫不能因為換格式就報廢。⚠️ **退路絕不可以是
+    `allow_pickle=True`**:那等於讓一份掉包的聲紋檔在開工具的當下執行任意程式碼
+    (見 `_LegacyNamesUnpickler`)。"""
     f = store_file()
     if not f.exists():
         return _empty()
     legacy = False
     try:
         try:
-            names, vecs = _read(f, allow_pickle=False)
+            names, vecs = _read(f)
         except ValueError:
             # numpy 對「內容是 pickle、卻沒開 allow_pickle」丟的就是 ValueError
-            names, vecs = _read(f, allow_pickle=True)
+            names, vecs = _read_legacy(f)
             legacy = True
     except Exception:
         dest = _set_aside(f)
