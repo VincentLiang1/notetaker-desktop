@@ -26,6 +26,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import re
 import shutil
 import threading
 import urllib.request
@@ -62,6 +63,13 @@ MAC_ASSET = "notetaker-desktop-mac.zip"
 #: 瘦包的舊版副本都只認 `WIN_ASSET`。⚠️ 兩個名字都與 `scripts/release.py` 的同名常數一致(測試釘著)
 WIN_UPDATE_ASSET = "notetaker-desktop-win-update.zip"
 WIN_FFMPEG_ASSET = "ffmpeg-win.exe"
+#: ffmpeg 沒換版就**不再每版重傳**(2026-11-12 使用者:「我沒有變動才對,可以不要每次都上傳嗎?」——99 MB,
+#: 慢的上行網路要傳一個多小時,v1.11.8 就是傳到一半斷線):Release 不附 `WIN_FFMPEG_ASSET`,改在內文**最後一行**
+#: 放一行 HTML 註解,指向早先那一版上同一份 ffmpeg(`ffmpeg_home_line`;網頁上看不到,`notes_from_body` 只取
+#: `---` 之前,也不會進對話框)。⚠️ **放在內文而不是另一個附檔**:`fetch_latest` 本來就拿到內文,不必多一次連線,
+#: 也就沒有「指標讀不到」這種新的失敗。⚠️ **被指到的那一版不能刪**(刪了附檔,`_stage_ffmpeg` 下載失敗、整個更新
+#: 不換);`release.py` 每次發版都重新確認它還在、摘要相同,見 `docs/dev/publish.md` §4.7
+FFMPEG_HOME_RE = re.compile(r"<!-- ffmpeg-win: (v\d+\.\d+\.\d+) sha256:([0-9a-f]{64}) (\d+) -->")
 #: 舊 repo 的附檔名:**只有橋接版**用它發(已裝的舊版照這兩個名字找)
 LEGACY_WIN_ASSET = "scribe2md-win.zip"
 LEGACY_MAC_ASSET = "scribe2md-mac.zip"
@@ -202,12 +210,18 @@ def fetch_latest(timeout: float = CHECK_TIMEOUT_SEC, asset_name: str | None = No
     assets = {a.get("name"): a for a in data.get("assets") or [] if a.get("name")}
     asset = assets.get(asset_name) if asset_name else None
     ffmpeg: dict = {}
-    # 瘦包:Windows、而且 Release 同時附了瘦包與**帶摘要的** ffmpeg 才走(少一樣就照舊下載完整包——
-    # 沒有摘要就無從判斷本機那份要不要換,寧可多抓 34 MB)
+    # 瘦包:Windows、而且知道 ffmpeg 在哪、摘要是多少才走(不知道就照舊下載完整包——沒有摘要就無從判斷
+    # 本機那份要不要換,寧可多抓 34 MB)。ffmpeg 有兩種給法:這一版自己附了(ffmpeg 換版的那一版),或內文
+    # 最後一行指向早先那一版(`FFMPEG_HOME_RE`,沒換版時);前者優先
     slim, ff = assets.get(WIN_UPDATE_ASSET), assets.get(WIN_FFMPEG_ASSET)
-    if asset_name == WIN_ASSET and slim and ff and _digest(ff):
-        asset, ffmpeg = slim, {"ffmpeg_url": ff.get("browser_download_url"),
-                               "ffmpeg_sha256": _digest(ff), "ffmpeg_size": int(ff.get("size") or 0)}
+    if asset_name == WIN_ASSET and slim:
+        if ff and _digest(ff):
+            ffmpeg = {"ffmpeg_url": ff.get("browser_download_url"),
+                      "ffmpeg_sha256": _digest(ff), "ffmpeg_size": int(ff.get("size") or 0)}
+        else:
+            ffmpeg = ffmpeg_home(data.get("body"))
+        if ffmpeg:
+            asset = slim
     return Release(
         version=tag.lstrip("vV"),
         notes=notes_from_body(data.get("body")),
@@ -217,6 +231,23 @@ def fetch_latest(timeout: float = CHECK_TIMEOUT_SEC, asset_name: str | None = No
         asset_sha256=_digest(asset or {}),
         **ffmpeg,
     )
+
+
+def ffmpeg_home_line(tag: str, sha256: str, size: int) -> str:
+    """Release 內文最後那一行(`release.py` 寫、`ffmpeg_home` 讀;格式只有這一份)。"""
+    return f"<!-- ffmpeg-win: {tag} sha256:{sha256} {size} -->"
+
+
+def ffmpeg_home(body: str | None) -> dict:
+    r"""從 Release 內文找出「ffmpeg 放在哪一版」→ `Release` 的三個 ffmpeg 欄位;沒有就空 dict。
+
+    ⚠️ **網址由這裡組、不從內文照抄**:`FFMPEG_HOME_RE` 只收 `v{版號}`,組出來一定是 `REPO` 底下那一版的
+    `WIN_FFMPEG_ASSET`,內文被改壞也指不到別的網站去;下載到的檔案再由 `_fetch` 對摘要。"""
+    m = FFMPEG_HOME_RE.search(body or "")
+    if not m:
+        return {}
+    return {"ffmpeg_url": f"https://github.com/{REPO}/releases/download/{m.group(1)}/{WIN_FFMPEG_ASSET}",
+            "ffmpeg_sha256": m.group(2), "ffmpeg_size": int(m.group(3))}
 
 
 def _digest(asset: dict) -> str | None:
