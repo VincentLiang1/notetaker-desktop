@@ -171,6 +171,10 @@ NAV_LIFT, SUBNAV_LIFT = 3, 4
 # ⚠️ **「要做什麼」那一排不吃這三個數字**(2026-09-15 使用者選案 C):它長得跟分頁一樣,
 # 高度是 `TAB_PILL_H` ＋ `TAB_BAR_H`、左右不留內距,見 `App._segmented` 的 `tabs`。
 SEG_H, SEG_H_ON, SEG_PAD = 37, 31, 10
+# 同一種長相、矮一號(`_segmented(small=True)`,只給錄音中「★ 重點 | 逐字稿」那一列;2026-11-12
+# 使用者從三種高度實拍裡選:一樣整條寬、字小一號、高度矮一號)。⚠️ 同上,必須等於
+# `make_skin.SQ_H_SEG_SM` / `SQ_H_SEG_SM_ON`;`SEG_PAD` 的幾何條件測試也逐檔驗這一對。
+SEG_SM_H, SEG_SM_H_ON = 31, 25
 
 # 兩排分頁選中那一格的膠囊高度。⚠️ **量網頁版得到的**:兩排都是 **45 實體 px**
 # @150%(頂層 y 339~383、子層 417~461),÷1.5 = 30——兩排一樣高不是巧合,它們在網頁版
@@ -556,7 +560,9 @@ REC_DOT, REC_DOT_GAP = 8, SP_SM
 # 使用者的說法是「這三句話沒有對齊,很醜」。⚠️ **拿掉 VS16 只縮小到 3px、不會歸零**
 # (`⚠ ` 量出來 16px),所以整顆記號一起拿掉——`test_the_recording_status_lines_all_start_flush` 釘著,突變 M1009。
 # ⚠️ **警告的份量改由色點承擔**:錄音中那顆點本來就是紅的,而這一塊只在錄音中出現。
-REC_CLAMSHELL = t("錄音中請不要闔上螢幕,闔上螢幕就會掉音訊")
+# ⚠️ **2026-11-12 縮成四個字**(使用者圈出右卡頂端「資訊太多」,選 A 案):紅點 ＋「錄音中」＋
+# 計時上到卡片標題列,這一句跟背景轉錄進度併成標題底下一行灰色小字(`_rec_head`)。
+REC_CLAMSHELL = t("請勿闔上螢幕")
 REC_FINISHING = t("收尾中:完成剩餘轉錄與講者分析,進度見下方的預覽區…")
 # 收尾沒做完時狀態列的開頭(見 `_rec_done`),後面一律接 `salvage_note` 講錄音檔存到哪。
 # ⚠️ **要講錄音檔在哪、以及怎麼補救**:放棄的是一整場會議的逐字稿,只講「已停止」或
@@ -627,7 +633,8 @@ OUTDIR_CANNOT = t("這個資料夾寫不進去,請換一個")
 MINUTES_HINT = (t("挑一份轉好的 .md(建議先替講者命名),整理出摘要、議題、待辦。"
                 "⚠ 地端小模型,品質比不上雲端 AI,只能當草稿。"))
 # 命名收工之後右邊預覽卡上那顆捷徑(B 案的後半):帶入剛寫好的那份、直接開始
-MINUTES_SHORTCUT = t("✨ 用這份產生會議紀錄草稿")
+# 2026-11-12 使用者指定改成這句(原本「用這份產生會議紀錄草稿」:「這份」指哪一份不清楚)
+MINUTES_SHORTCUT = t("✨ 用剛才產生的逐字稿,產生會議草稿")
 # 命名收工之後預覽框底下那顆「送至 LLM Wiki」(`sendbox.py`;使用者 2026-11-10 選 A 案)。
 # ⚠️ **不可以只寫「送出」**(使用者同日:「讓人不知道意思,因為本來就有檔案可以取得」):
 # 要講出送去哪、送了會怎樣。⚠️ 紙飛機是自己畫的(`DRAWN_MARKS`),造型同手機版那顆。
@@ -1061,6 +1068,10 @@ CHECK_W = 28
 # 把頁面撐滿」):`tk.Text` 不給 height 就是預設 24 行、實測請求 564px,它一個人
 # 就能把命名區擠成 1px。
 PREVIEW_LINES = 20
+# 聲音頁右卡那一框的字級(錄音中的逐字稿頁與平常的逐字稿預覽共用;2026-11-12 使用者從
+# 9/10/11 三種實拍裡選 11,並指定停止後的預覽跟著放大,免得一停字就縮回去)。每段上面
+# 那行灰色時間小一號。
+PREVIEW_FONT = 11
 
 # 轉檔頁左欄佔內容區的幾成(`grid` 的權重 5:7)。⚠️ **說明小字的換行寬度靠這個
 # 算,不准去量欄位自己有多寬**——理由見 `_wrap_width`。
@@ -1270,6 +1281,9 @@ STYLES = (
     # 會紅。
     ("SegItem.TLabel", "btn", "ink", 10, False),     # 沒選中的那幾格
     ("SegOn.TLabel", "card", "ink", 10, True),       # 選中的那一格
+    # 矮一號那一列(`SEG_SM_H`)的字,小一號;底色規則同上兩條
+    ("SegItemSm.TLabel", "btn", "ink", 9, False),
+    ("SegOnSm.TLabel", "card", "ink", 9, True),
     # 「要做什麼」那一排沒選中的那幾格(2026-09-15 選案 C:長得跟分頁一樣,坐在卡片白上、
     # 淡字,同 `Sub.TLabel` 那一族)。⚠️ **不可以挪到 `btn`**:同上那條對比,突變 M584 守著。
     ("Seg.TLabel", "card", "muted", 10, False),
@@ -1295,6 +1309,10 @@ STYLES = (
     # Markdown(會原樣印出四個星號)。兩種警告(詞表超出預算、替換規則缺新詞)
     # 的共同點是**使用者不會自己發現**,所以它要跳出來。
     ("Warn.TLabel", "card", "warn", 9, True),        # 同上,但出問題那一句
+    # 錄音中標題底下那行灰色小字(`_rec_head`),與出狀況時另起的那一行紅字(2026-11-12 使用者
+    # 選 A 案:平常只有一行灰字,沒收到聲音之類的警告才多一行紅的)
+    ("RecSub.TLabel", "card", "muted", 9, False),
+    ("RecAlert.TLabel", "card", "err", 9, False),
     # 使用說明的目錄(2026-09-03 照網頁版 `#help-nav`):沒選中的坐在灰槽上、選中的坐在
     # 白膠囊上(粗體;網頁版 `font-weight: 600`)。⚠️ 底色要跟著各自坐的那一層(同 segmented
     # 那條):`ttk.Label` 是實色底,給錯就是一塊色差方塊。
@@ -1358,7 +1376,8 @@ def configure_styles(root: tk.Misc, fam: str, pal: dict) -> None:
     # 開頭就 `if self._busy[...]: return`,所以錄音中點它一直是沒反應——而「按了沒反應」
     # 與「壞掉」在畫面上長得一模一樣。字色用 `run_off_fg`,那是整個視窗停用態共用的那個
     # (`skin.ACCENT_STYLES` 的 map 也是它),不另外發明一個顏色。
-    for _seg in ("SegItem.TLabel", "SegOn.TLabel", "Seg.TLabel", "SegTabOn.TLabel"):
+    for _seg in ("SegItem.TLabel", "SegOn.TLabel", "SegItemSm.TLabel", "SegOnSm.TLabel",
+                 "Seg.TLabel", "SegTabOn.TLabel"):
         st.map(_seg, foreground=[("disabled", pal["run_off_fg"])])
     # 「要做什麼」選中那一格,膠囊**裡面**那一層(理由同 `SegOnBody`:內層是實色底,給錯就是
     # 一塊白方塊壓在灰膠囊中間)。
@@ -1462,12 +1481,12 @@ REC_PAUSE = t("‖ 暫停錄音")
 REC_RESUME = t("● 繼續錄音")
 # 暫停中狀態列的第二行(2026-10-07 使用者看過實拍選定)。⚠️ **兩顆鈕的名字從常數組、
 # 不照抄字面**:鈕上的字一改,這句就會指向一顆不存在的鈕(同 `WORK_BUSY_TEXT` 那條)
+REC_PAUSED_TITLE = t("已暫停")
 REC_PAUSED_HINT = (t("暫停期間的聲音不會錄進去。按「{REC_RESUME}」接著錄;按「{busy}」就直接收尾、產生逐字稿。", REC_RESUME=REC_RESUME, busy=REC_ACTION.busy))
 # 錄音中第三顆(2026-10-17 使用者:照手機版的「重點」;版面選 A 案「動作列第三顆」,
 # 落選的是右卡頂端一整條、右卡標題列右側)。按一下 = 標「剛剛那段話」(`highlights.py`),
 # 右邊的預覽框改放重點卡片、游標停在新卡片的輸入格(使用者選「卡片內直接打字」)。
-# ⚠️ **錄音中的即時逐字稿同日拿掉了**(使用者:「關掉逐字稿預覽功能,將位置留給重點輸入」,
-# 同手機版):背景照轉,停止後一樣快,只是不畫出來
+# (錄音中的即時逐字稿同日拿掉、2026-11-11 回來了:右卡改成「重點 | 逐字稿」兩頁,見 `_hl_panel`)
 REC_MARK = t("★ 重點")
 # 三顆擠不下時只留記號(2026-10-17 真視窗量:左欄最寬 441,三顆各分到 133、字要 123~127;
 # 最窄的視窗每顆只剩 84)。⚠️ Tk 放不下時**直接裁字、不給省略號**,所以不能讓它自己裁
@@ -1475,7 +1494,18 @@ REC_COMPACT = {REC_ACTION.busy: "■", REC_PAUSE: "‖", REC_RESUME: "●"}
 RUN_TITLE = t("逐字稿預覽(轉檔進度顯示於此)")
 # 命名卡裡「現場標記的重點」那一區的說明(使用者 2026-10-17 選「事後在重設講者補改」)
 HLREV_HINT = t("錄音時按「★ 重點」標的。改備註按 Enter 寫回逐字稿;按 ✕ 刪掉按錯的。")
-HL_TITLE = t("重點(錄音中)")
+# 錄音中右卡的標題:底下一整列「重點 | 逐字稿」切換(2026-11-11 使用者選 B 案,同 iOS
+# `RecordingTabs`),標題只講狀態、不講哪一頁
+HL_TITLE = t("錄音中")
+REC_TAB_TRANSCRIPT = t("逐字稿")
+# 逐字稿頁最上面那句。⚠️ **要講明講者名字還沒標**:不講的話使用者會以為講者分離壞掉了,
+# 而它本來就要等收尾才算得出來。⚠️ **也要講多久長一批**:電腦版沒有手機那層即時預覽,
+# 字是背景轉錄一批一批交出來的(`live._CHUNK_SEC` = 150 秒,第一批提早在 60 秒),
+# 不講的話盯著它看兩分鐘沒動靜,會以為壞了。數字改了這句跟著改(測試守著)。
+LIVE_HEAD = t("講者名字要等停止錄音、分析完才標上。背景每 2 分半鐘轉出一批,第一批約在開錄 1 分鐘後出現。")
+# 「預覽已經停在最底」的判準(見 `_live_refresh`):`Text.yview()` 回 (第一可見, 最後可見),
+# 捲到底時第二個是 1.0。⚠️ **不寫 `== 1.0`**:那是浮點數,差一個 px 就不是整數 1。
+LIVE_AT_END = 0.999
 
 
 def mark_face(count: int, compact: bool = False) -> str:
@@ -1999,6 +2029,14 @@ class App(tk.Tk):
         self._hl = highlights.Highlights()
         self._hl_rows: dict[float, tuple] = {}
         self._hl_box = None
+        # 錄音中「重點 | 逐字稿」切換(2026-11-11 使用者選 B 案;用到才建,見 `_rec_tabs_build`):
+        # 現在哪一頁、逐字稿畫到第幾段、逐段的繁簡轉換快取
+        self._rec_tabs = None
+        self._rec_tab_cells: dict = {}
+        self._rec_tab = "tx"
+        self._live_box = None
+        self._live_n = -1
+        self._live_conv: dict = {}
         self._rec_compact = False
         # 畫好的圖示。⚠️ **一定要自己留著參照**:`PhotoImage` 沒人指著就被 GC 掉,
         # 而畫面上的症狀是圖示變成空白——不會有任何錯誤。
@@ -3883,7 +3921,7 @@ class App(tk.Tk):
         return self.px(fallback)
 
     def _segmented(self, parent, options, command, *,
-                   tabs: bool = False) -> tuple[ttk.Frame, dict]:
+                   tabs: bool = False, small: bool = False) -> tuple[ttk.Frame, dict]:
         r"""一排幾選一的膠囊 segmented(照網頁版的 `.seg-radio`)。
 
         `options` 是 `((鍵, 圖示, 文字), …)`,回傳 `(整條槽, {鍵: (格子, 內層,
@@ -3904,6 +3942,8 @@ class App(tk.Tk):
         換頁,長相要跟分頁分得開——Apple 也這樣分(換內容用字＋底線,切狀態用底座＋膠囊)。
         沒選中的字是 `ink`、坐在槽上(`SegItem.*`);選中那格換成白膠囊(`SegOn.*`)。
         ⚠️ **槽的左右內距 `SEG_PAD` 撐著一條幾何條件**,理由見那個常數。
+        **`small=True`**:同一種長相矮一號、字小一號(`SEG_SM_H`;只給錄音中「★ 重點 | 逐字稿」)。
+        ⚠️ 選中/沒選中換樣式的是 `_segment_show`,它照 Label 的樣式名認出這一排是不是小的。
 
         (沿革:2026-09-01 照網頁版做成灰槽 + 白色選中段;2026-09-06 為了 `muted` 坐在灰槽
         上過不了 9:1 拿掉槽、改成白膠囊 ＋ `accent` 描邊(選案 H);2026-09-15 沒選中的字改用
@@ -3928,11 +3968,13 @@ class App(tk.Tk):
             track.configure(height=pill_h + bar_h)
         else:
             # ⚠️ 槽本身是一張膠囊底板,高度一樣要問皮膚(見 `_plate_h`),不可以 `px(SEG_H)`
-            track = ttk.Frame(parent, style="SegTrack.TFrame",
+            track = ttk.Frame(parent, style="SegTrackSm.TFrame" if small else "SegTrack.TFrame",
                               padding=(self.px(SEG_PAD), 0))
-            track.configure(height=self._plate_h("Sq.seg", SEG_H))
+            track.configure(height=self._plate_h("Sq.seg_sm", SEG_SM_H) if small
+                            else self._plate_h("Sq.seg", SEG_H))
         off_cell = "SegCell.TFrame" if tabs else "SegItem.TFrame"
-        off_label = "Seg.TLabel" if tabs else "SegItem.TLabel"
+        off_label = ("Seg.TLabel" if tabs else
+                     "SegItemSm.TLabel" if small else "SegItem.TLabel")
         track.grid_propagate(False)
         track.rowconfigure(0, weight=1)
         cells: dict[str, tuple] = {}
@@ -3946,7 +3988,8 @@ class App(tk.Tk):
                 cell.pack(fill="x")
             else:
                 cell = ttk.Frame(track, style=off_cell)
-                cell.configure(height=self._plate_h("Sq.seg_on", SEG_H_ON))
+                cell.configure(height=self._plate_h("Sq.seg_sm_on", SEG_SM_H_ON) if small
+                               else self._plate_h("Sq.seg_on", SEG_H_ON))
                 cell.grid(row=0, column=i, sticky="ew")
             body = ttk.Frame(cell, style=off_cell)
             body.place(relx=0.5, rely=0.5, anchor="center")
@@ -4002,9 +4045,10 @@ class App(tk.Tk):
         for k, (cell, body, ico, lab, bar, seg) in cells.items():
             on = k == key
             if bar is None:
-                cell.configure(style="SegOn.TFrame" if on else "SegItem.TFrame")
+                sm = "Sm" if str(lab.cget("style")).endswith("Sm.TLabel") else ""
+                cell.configure(style=f"SegOn{sm}.TFrame" if on else "SegItem.TFrame")
                 body.configure(style="SegOnBody.TFrame" if on else "SegItem.TFrame")
-                style = "SegOn.TLabel" if on else "SegItem.TLabel"
+                style = f"SegOn{sm}.TLabel" if on else f"SegItem{sm}.TLabel"
             else:
                 cell.configure(style="SegTab.TFrame" if on else "SegCell.TFrame")
                 body.configure(style="SegTabBody.TFrame" if on else "SegCell.TFrame")
@@ -5433,7 +5477,7 @@ class App(tk.Tk):
         # 由右欄決定,這個數只是請求值;但 `tk.Text` 不給 height 就是**預設 24 行**(實測請求
         # 564px),早期單欄版面時它一個人就把命名區擠成 1px。多的空間由 `expand` 給它,少的時候
         # 它自己縮,而不是把別人擠掉。
-        self._run_preview = tk.Text(pwrap, font=(self.fam, 9), relief="flat", bd=0,
+        self._run_preview = tk.Text(pwrap, font=(self.fam, PREVIEW_FONT), relief="flat", bd=0,
                                     highlightthickness=0, wrap="word", state="disabled",
                                     height=PREVIEW_LINES,
                                     bg=self.pal["field"], fg=self.pal["ink"],
@@ -6575,6 +6619,9 @@ class App(tk.Tk):
         if mark is None or self._action_phase("rec") != "busy":
             return
         mark.configure(text=mark_face(len(self._hl.marks()), self._rec_compact))
+        # 切換的那一格也帶個數(同 iOS「重點 (N)」);它在右卡、寬度夠,不必縮成記號
+        if "hl" in self._rec_tab_cells:
+            self._rec_tab_cells["hl"][3].configure(text=mark_face(len(self._hl.marks())))
         rec = self._rec.get("recorder")
         full = REC_RESUME if rec is not None and rec.paused else REC_PAUSE
         self._rec_pause.configure(text=REC_COMPACT[full] if self._rec_compact else full)
@@ -6600,6 +6647,10 @@ class App(tk.Tk):
         if rec is None or self._action_phase("rec") != "busy":
             return
         t = self._hl.add(rec.elapsed())
+        # ⚠️ **停在逐字稿頁時先切過去**(2026-11-11 使用者選「自動切到重點頁」):游標要停進
+        # 新卡片的輸入格,而那一格在另一頁——不切的話打的字進了一個看不見的格子
+        if self._rec_tab != "hl":
+            self._rec_tab_show("hl")
         if t not in self._hl_rows:
             self._hl_row(t)
         self._hl_rows[t][1].focus_set()
@@ -6609,24 +6660,127 @@ class App(tk.Tk):
         logger.info("錄音中標了重點(第 %.0f 秒,共 %d 個)", t, len(self._hl.marks()))
 
     def _hl_panel(self, on: bool) -> None:
-        r"""右邊那一格:錄音中是重點卡片,其餘時候是逐字稿預覽(使用者選「停止之後換回預覽」)。
+        r"""右邊那一格:錄音中是「重點 | 逐字稿」兩頁,其餘時候是逐字稿預覽(使用者選「停止之後換回預覽」)。
 
+        (2026-10-17 錄音中只放重點卡片;2026-11-11 使用者要回即時逐字稿,選 B 案:切換自己
+        一整列、緊貼在框上面,**預設逐字稿**,同 iOS `RecordingTabs`。)
         ⚠️ **換的是預覽框裡面的東西,框本身不動**:進度那組靠 `pack(before=框)` 排在它前面
-        (`_say`),把框收掉那一句就會丟 `TclError`。"""
+        (`_say`),把框收掉那一句就會丟 `TclError`。切換那一列同樣 `before=框`。"""
         if on:
             if self._hl_box is None:
                 self._hl_build()
+            if self._rec_tabs is None:
+                self._rec_tabs_build()
             self._run_pbar.pack_forget()
             self._run_preview.pack_forget()
-            self._hl_box.pack(fill="both", expand=True)
+            self._rec_tabs.pack(fill="x", before=self._run_pwrap, pady=(self.px(SP_SM), 0))
+            self._rec_tab_show("tx")
             self._run_title.configure(text=HL_TITLE)
             return
-        if self._hl_box is not None:
-            self._hl_box.pack_forget()
+        for w in (self._hl_box, self._live_box, self._rec_tabs):
+            if w is not None:
+                w.pack_forget()
         if not self._run_preview.winfo_manager():
             self._run_pbar.pack(side="right", fill="y")
             self._run_preview.pack(side="left", fill="both", expand=True)
-        self._run_title.configure(text=RUN_TITLE)
+        self._run_title.configure(text=RUN_TITLE, image="")
+
+    def _rec_tabs_build(self) -> None:
+        r"""「★ 重點 | 逐字稿」那一列與逐字稿頁(用到才建)。
+
+        ⚠️ **長相是「切狀態」那一種膠囊**(`_segmented(tabs=False)`,同「收音情境」):上面兩排
+        的分頁樣式只給「要做什麼」那一排(2026-09-15 使用者指定)。**矮一號、字小一號**
+        (`small=True`,2026-11-12 使用者選;一樣整條寬)。"""
+        opts = (("hl", "", mark_face(len(self._hl.marks()))), ("tx", "", REC_TAB_TRANSCRIPT))
+        track, cells = self._segmented(self._run_result, opts, self._rec_tab_show, small=True)
+        self._rec_tabs, self._rec_tab_cells = track, cells
+        pal, fam = self.pal, self.fam
+        box = tk.Frame(self._run_pwrap, bg=pal["field"])
+        txt = tk.Text(box, font=(fam, PREVIEW_FONT), relief="flat", bd=0, highlightthickness=0,
+                      wrap="word", state="disabled", height=PREVIEW_LINES,
+                      bg=pal["field"], fg=pal["ink"], selectbackground=pal["row_sel"],
+                      padx=self.px(SP_SM), pady=self.px(SP_XS))
+        bar = ttk.Scrollbar(box, orient="vertical", command=txt.yview)
+        txt.configure(yscrollcommand=bar.set)
+        bar.pack(side="right", fill="y")
+        txt.pack(side="left", fill="both", expand=True)
+        # 一段兩行:時間自己一行灰色小字、文字整寬(同 iOS `LiveText.row`,2026-11-07 使用者選 (B))
+        txt.tag_configure("live_t", foreground=pal["muted"], font=(fam, PREVIEW_FONT - 1))
+        txt.tag_configure("live_p", spacing3=self.px(SP_SM))
+        self._live_box, self._live_text = box, txt
+        self._live_paint([])
+
+    def _rec_tab_show(self, key: str) -> None:
+        """切到「重點」(`hl`)或「逐字稿」(`tx`)那一頁。"""
+        if self._rec_tabs is None:
+            return
+        self._rec_tab = key
+        self._segment_show(self._rec_tab_cells, key)
+        show, hide = ((self._hl_box, self._live_box) if key == "hl"
+                      else (self._live_box, self._hl_box))
+        hide.pack_forget()
+        show.pack(fill="both", expand=True)
+        if key == "tx":
+            self._live_text.yview_moveto(1.0)   # 切回來就看最新的(同 iOS `onAppear`)
+
+    def _live_reset(self) -> None:
+        r"""新的一場:逐字稿頁清空。⚠️ **每一場都要歸零**:不歸零的話這一場會接在上一場的字
+        後面,而 `_live_n` 還停在上一場的段數 → 新的段落根本畫不出來。"""
+        self._live_n = -1
+        self._live_conv.clear()
+        if self._live_box is not None:
+            self._live_paint([])
+
+    def _live_refresh(self, live) -> None:
+        r"""錄音中的逐字稿頁:背景轉好一批就重畫(每秒問一次,段數沒變就不動)。
+
+        (2026-08-30 從網頁版移植、2026-10-17 拿掉、2026-11-11 使用者要回來,放在「逐字稿」頁。)
+        ⚠️ **段數沒變就不要重畫**:每秒重寫整個 Text 會把使用者的捲動位置與選取狀態洗掉。
+        ⚠️ **逐段快取轉換結果、只轉新增的那幾段**:整份重轉是每秒一次的全文轉換。
+        ⚠️ **轉換看會議語言**(同 `pipeline.render_transcript`):繁中才繁化、簡中轉簡體、
+        英文不動——照抄舊版一律繁化,簡中會議錄音中看到的是繁體字。
+        ⚠️ **這裡不標講者**:講者要等收尾的分群才知道。"""
+        snap = live.snapshot()
+        if len(snap) == self._live_n:
+            return
+        from meeting_scribe import convert   # 局部 import:本檔刻意不在模組層背 OpenCC
+        lang = self._rec.get("language") or meetlang.DEFAULT
+        if meetlang.traditionalize(lang):
+            conv = convert.to_taiwan_traditional
+        elif meetlang.simplify(lang):
+            conv = convert.to_simplified
+        else:
+            conv = None
+        rows = []
+        for seg in snap:
+            key = (seg.start, seg.end, seg.text)
+            if key not in self._live_conv:
+                self._live_conv[key] = conv(seg.text) if conv else seg.text
+            rows.append((seg.start, self._live_conv[key]))
+        self._live_n = len(snap)
+        self._live_paint(rows)
+
+    def _live_paint(self, rows: list) -> None:
+        r"""把 (開始秒數, 文字) 畫進逐字稿頁。
+
+        ⚠️ **跟著捲到最新,但他往上捲走的時候不准搶**(2026-09-20 使用者指定,同 iOS):只有原本
+        就停在最底時才跟;捲走了就把他原本在讀的那一行捲回來(重畫會彈回開頭)。
+        ⚠️ **「在不在最底」必須在 `delete` 之前問**:內容一清空捲動位置就回到頂端。
+        ⚠️ **記的是行號不是比例**:內容只在尾端追加、前面不變,同一個行號就是同一段話。"""
+        txt = self._live_text
+        at_end = txt.yview()[1] >= LIVE_AT_END
+        keep = "" if at_end else txt.index("@0,0")
+        txt.configure(state="normal")
+        txt.delete("1.0", "end")
+        txt.insert("end", LIVE_HEAD + "\n", ("live_t", "live_p"))
+        for start, text in rows:
+            txt.insert("end", pipeline.mmss(start) + "\n", "live_t")
+            txt.insert("end", text + "\n", "live_p")
+        txt.configure(state="disabled")
+        if at_end:
+            txt.yview_moveto(1.0)
+        elif keep:
+            txt.yview(keep)
 
     def _hl_build(self) -> None:
         """重點卡片那一格(用到才建):一張說明 ＋ 可以捲的一疊卡片,新的在最下面(同手機版)。"""
@@ -6764,6 +6918,9 @@ class App(tk.Tk):
         self._rec_status.pack(side="left", anchor="n")
         line = self._label_font(self._rec_status).metrics("linespace")
         self._rec_dot.configure(padding=(0, max(0, (line - self.px(REC_DOT)) // 2), 0, 0))
+        # 錄音中出狀況才出現的那一行紅字(`_rec_head`)。⚠️ **自己一個 Label**:一個 Label 只有
+        # 一種字色,而它要紅、上面那行要灰。排在狀態列正下方(`pack(after=)`,見 `_rec_head`)。
+        self._rec_alert = self._wrap(ttk.Label(card, style="RecAlert.TLabel", justify="left"))
         self._rec_say(REC_IDLE, "wait")
 
     def _rec_say(self, text: str, tone: str) -> None:
@@ -6781,8 +6938,45 @@ class App(tk.Tk):
         紅**:錄音的慣例就是紅點,而兩者的字截然不同。⚠️ **不用 `stop`(停止鈕那個深紅)**:
         它在深色卡片上對比只有 1.80,一顆 8 px 的點會沉進背景;狀態色那組兩個模式都校過。
         畫不出色點的機器(`_dot_image` 回 `None`)只剩字,照樣讀得懂。"""
-        self._rec_status.configure(text=text)
+        # 從錄音中那個長相(`_rec_head`)換回來:點回到這一列、字回到大一號,標題拿掉點與計時
+        if not self._rec_dot.winfo_manager():
+            self._rec_dot.pack(side="left", anchor="n", before=self._rec_status)
+        if self._run_title.cget("image"):
+            self._run_title.configure(text=HL_TITLE, image="")
+        self._rec_alert.pack_forget()
+        self._rec_row_gap(SP_MD)
+        self._rec_status.configure(text=text, style="RecStatus.TLabel")
         self._rec_dot.configure(image=self._dot_image(tone) or "")
+
+    def _rec_row_gap(self, top: int) -> None:
+        """狀態列與標題之間的距離(收著的時候不動它:`_mode_show` 放回來時自己給)。"""
+        if self._rec_status_row.winfo_manager():
+            self._rec_status_row.pack_configure(pady=(self.px(top), self.px(SP_XS)))
+
+    def _rec_head(self, title: str, tone: str, sub: str, alert: str = "") -> None:
+        r"""錄音中/暫停中的長相:色點與計時上到卡片標題列,狀態列只剩一行灰色小字,
+        出狀況(`alert` 非空)再多一行紅字(2026-11-12 使用者選 A 案)。
+
+        ⚠️ **只在錄音中與暫停中用**:其餘每一句(尚未開始、開不起來、停止中、收尾、完成、
+        中止)仍走 `_rec_say`,點留在狀態列——它們可能換成兩行、帶著錄音檔路徑,標題列放不下。
+        `_rec_say` 會把這裡改過的三樣東西(標題的點、狀態列的點、紅字那行)全部還原。
+        ⚠️ **點用 `compound="left"` 放在標題上是可以的**:標題永遠一行,`_rec_status_build`
+        講的「兩行時點落在中間」在這裡不會發生。"""
+        self._run_title.configure(text=title, image=self._dot_image(tone) or "",
+                                  compound="left")
+        if self._rec_dot.winfo_manager():
+            self._rec_dot.pack_forget()
+        self._rec_status.configure(text=sub, style="RecSub.TLabel")
+        self._rec_row_gap(SP_XS)     # 灰字是標題的副標,貼近一點
+        if alert:
+            self._rec_alert.configure(text=alert)
+            if not self._rec_alert.winfo_manager():
+                # ⚠️ 狀態列沒 pack(不在收音模式,只有測試走得到)時 `after=` 會丟 TclError
+                row = self._rec_status_row
+                self._rec_alert.pack(fill="x", after=row if row.winfo_manager() else self._run_head,
+                                     pady=(0, self.px(SP_XS)))
+        else:
+            self._rec_alert.pack_forget()
 
     def _dot_image(self, tone: str):
         r"""一顆狀態色點(右邊留好與字之間的縫),照這台的縮放當場畫、畫過就記住。
@@ -7624,7 +7818,7 @@ class App(tk.Tk):
         return line
 
     def _rec_tick(self) -> None:
-        """錄音中每秒更新一次:計時與背景轉錄進度(即時逐字稿 2026-10-17 拿掉,位置讓給重點卡片)。
+        """錄音中每秒更新一次:計時、背景轉錄進度,以及「逐字稿」頁(`_live_refresh`)。
 
         ⚠️ 沒有這個的話,畫面上看不出它還在錄。
         ⚠️ **按過「停止錄音」就不要再跳**(2026-09-04;網頁版 `_lock_for_rec_finish`
@@ -7647,7 +7841,11 @@ class App(tk.Tk):
         return max(end - self._rec_t0 - paused, 0.0)
 
     def _rec_show_status(self) -> None:
-        """錄音中那一行狀態(計時、背景轉錄進度、警告),畫一次。"""
+        r"""錄音中那一塊(計時、背景轉錄進度、警告),畫一次。
+
+        (2026-11-12 使用者圈出右卡頂端「資訊太多」,選 A 案:「錄音中」原本講三次——卡片
+        標題、狀態行、闔蓋提醒——情境與語言左卡本來就看得到。)現在是三層,見 `_rec_head`:
+        標題列「● 錄音中   02:31」、底下一行灰字「請勿闔上螢幕 · 背景轉錄…」、出狀況才多一行紅字。"""
         rec = self._rec.get("recorder")
         if rec is None:
             return
@@ -7659,27 +7857,27 @@ class App(tk.Tk):
         # 網頁版三處都是叫 `pipeline.mmss`——只有這裡漏了。
         tail = (t("背景轉錄:已完成至 {v}", v=pipeline.mmss(done))
                 if done > 0 else t("背景轉錄暖機中…"))
+        # 逐字稿頁(暫停中也畫:暫停前那一批可能剛轉好)
+        if live is not None and self._live_box is not None:
+            self._live_refresh(live)
         if rec.paused:
-            # ⚠️ **琥珀色、不是紅的**:紅點的意思是「正在錄」。⚠️ 行首同樣不放記號
-            # (見 `REC_CLAMSHELL`);要講清楚兩顆鈕各做什麼——暫停中最常見的問題
-            # 是「停止會不會把剛剛錄的丟掉」
-            self._rec_say(
-                t("已暫停({v})・已錄 {v2},這次暫停了 {v3}。{tail}\n{REC_PAUSED_HINT}", v=SCENARIO_LABELS.get(self._rec.get('scene'), ''), v2=pipeline.mmss(secs), v3=pipeline.mmss(rec.pause_seconds()), tail=tail, REC_PAUSED_HINT=REC_PAUSED_HINT), "warn")
+            # ⚠️ **琥珀色、不是紅的**:紅點的意思是「正在錄」。要講清楚兩顆鈕各做什麼——
+            # 暫停中最常見的問題是「停止會不會把剛剛錄的丟掉」
+            self._rec_head(
+                f"{REC_PAUSED_TITLE}   {pipeline.mmss(secs)}", "warn",
+                t("這次暫停了 {v} · {tail}\n{REC_PAUSED_HINT}", v=pipeline.mmss(rec.pause_seconds()), tail=tail, REC_PAUSED_HINT=REC_PAUSED_HINT))
             return
-        # 開頭不再放「●」:前面那顆紅色的色點就是它(2026-09-17 選案 D)
-        line = (t("錄音中({v} · {lang})・已錄 {v2}。{tail}\n{REC_CLAMSHELL}", v=SCENARIO_LABELS.get(self._rec.get('scene'), ''), lang=MEETING_LANG_NAMES.get(self._rec.get('language'), ''), v2=pipeline.mmss(secs), tail=tail, REC_CLAMSHELL=REC_CLAMSHELL))
+        alerts = []
         # ⚠️ **裝置中途沒聲音了也要講**(2026-09-25 使用者選案 C):藍牙耳機被
         # 收起來、別的視訊程式把麥克風搶走,症狀都是「檔案照長、內容全是零」,
         # 而那是散會才會發現的那一種。開錄前那一關擋不到這些。
         if self._rec_plan_note:
-            line += f"\n{self._rec_plan_note}"
+            alerts.append(self._rec_plan_note)
         quiet = self._rec_silent_seconds()
-        # ⚠️ **行首同樣不放記號**(見 `REC_CLAMSHELL`):這一句進的是**同一個
-        # Label**,放了就只有它往右縮,而它出現的時機正是使用者盯著這一塊看的
-        # 時候。要吸引注意的是那顆紅色色點,不是行首多一個字。
         if quiet >= record.SILENT_WARN_SEC:
-            line += (t("\n已經 {v} 沒有收到任何聲音——麥克風可能被拔掉、靜音,或被別的程式佔用了。", v=pipeline.mmss(quiet)))
-        self._rec_say(line, "err")
+            alerts.append(t("\n已經 {v} 沒有收到任何聲音——麥克風可能被拔掉、靜音,或被別的程式佔用了。", v=pipeline.mmss(quiet)).strip())
+        self._rec_head(f"{HL_TITLE}   {pipeline.mmss(secs)}", "err",
+                       f"{REC_CLAMSHELL} · {tail}", "\n".join(alerts))
 
     def _rec_silent_seconds(self) -> float:
         """麥克風軌已經連續多久沒聲音。⚠️ 問不到一律回 0(不打擾)。"""
@@ -7840,8 +8038,14 @@ class App(tk.Tk):
         self._apply_busy_locks()      # 進階參數(講者人數例外)與資料分頁,見那一支
         # ⚠️ **每一場都要歸零**:不歸零的話這一場的卡片會接在上一場的後面
         self._run_set_preview("")
+        # 收工捷徑與「送至 LLM Wiki」指的是上一場的成品。⚠️ 錄音不經 `_run_lock`,那邊的收起
+        # 要到按停止才輪到——不在這裡收,整場錄音都掛著上一場那顆「用剛才產生的逐字稿」
+        # (2026-11-12 Mac 實跡:連錄兩場,第二場一開錄就看得到)
+        self._minutes_jump_show(None)
+        self._send_show(None)
         self._hl_reset()
         self._hl_panel(True)
+        self._live_reset()
         self._rec_t0 = time.monotonic()
         self._rec_t1 = 0.0           # ⚠️ 不歸零的話這一場的計時器一開始就是停的
         # 那顆鈕當場翻成「■ 停止錄音」,但**先鎖兩秒**(防誤按,見 `_rec_arm`)
@@ -9209,9 +9413,9 @@ class App(tk.Tk):
     def _run_set_preview(self, text: str) -> None:
         r"""重畫右邊的預覽(一次換掉整份內容,停在開頭)。
 
-        ⚠️ **不跟著捲到最新內容**:那是 2026-09-20 為「錄音中邊錄邊長」加的,2026-10-17
-        錄音中的即時逐字稿拿掉之後(位置讓給重點卡片),剩下的全是一次性換掉內容——
-        轉檔完成的整份逐字稿、核對改掛之後的重畫,捲到底等於開場就跳到結尾。"""
+        ⚠️ **不跟著捲到最新內容**:那是 2026-09-20 為「錄音中邊錄邊長」加的,而錄音中的逐字稿
+        2026-11-11 起畫在自己那一頁(`_live_paint`,跟著捲的邏輯在那邊),這個框剩下的全是
+        一次性換掉內容——轉檔完成的整份逐字稿、核對改掛之後的重畫,捲到底等於開場就跳到結尾。"""
         # 原文留一份(核對改掛與命名進度落地都要它),框裡畫的是剝過記號的版本
         self._preview_md = text or ""
         self._run_preview.configure(state="normal")

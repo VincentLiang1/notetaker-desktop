@@ -735,7 +735,8 @@ class LiveTranscriber:
     def snapshot(self) -> list[TranscriptSegment]:
         """目前累積的段落(全軌合併、按開始時間排序;未做講者/回音去重)。
 
-        ⚠️ 畫面不再用它(錄音中的即時逐字稿 2026-10-17 拿掉);留著給測試確認背景真的在轉。"""
+        錄音中右卡「逐字稿」頁畫的就是它(`desktop.App._live_refresh`;2026-10-17 拿掉、
+        2026-11-11 使用者要回來)。"""
         with self._lock:
             merged = [s for tr in self._tracks.values() for s in tr.segments]
         return sorted(merged, key=lambda s: (s.start, s.end))

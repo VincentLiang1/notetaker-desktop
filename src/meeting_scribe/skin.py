@@ -22,7 +22,7 @@ from winkit.skin import Button
 # ⚠️ **沒宣告的話共用包就整個不比對**(`getattr(spec, "SKIN_SCHEMA", None)`),而「舊資產
 # 配新程式」是可達的、失敗是完全無聲的——底下 `SKIN_FRAMES` / `SKIN_SWAPS` 每加一個
 # `Sq.*` 都要跳號,否則舊資產照樣載得起來、那幾顆的底板整個不畫。
-SKIN_SCHEMA = 7
+SKIN_SCHEMA = 8
 
 # 主要動作鈕的兩張皮(「開始轉檔」「開始錄音」「套用名字並下載」與「停止」)。⚠️ 樣式名**必須以 `.Accent.TButton` 結尾**才繼承得到那組
 # 圖片元件——ttk 是照後綴一層層往上找的
@@ -120,6 +120,9 @@ SKIN_FRAMES = (
     # 包設」的來源,把它放進來就是要一張它不穿的圖。
     ("SegTrack.TFrame", "Sq.seg", "btn"),
     ("SegOn.TFrame", "Sq.seg_on", "card"),
+    # 同一種長相、矮一號(錄音中「★ 重點 | 逐字稿」,2026-11-12 使用者選;見 `make_skin.SQ_H_SEG_SM`)
+    ("SegTrackSm.TFrame", "Sq.seg_sm", "btn"),
+    ("SegOnSm.TFrame", "Sq.seg_sm_on", "card"),
     # 子分頁選中的那一顆。⚠️ **2026-09-01 從純色的方角 Frame 換過來**:整個畫面其他
     # 東西都是圓角,只有它是方角灰塊,使用者當場圈出來。同 segmented,用它的 cell
     # 一定要 `height=` 釘死(見 `desktop.App._build_ui`)。

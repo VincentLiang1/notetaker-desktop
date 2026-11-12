@@ -80,7 +80,8 @@ OUT = ROOT / "src" / "meeting_scribe" / "assets" / "skin"
 # 5 = 2026-09-15 狀態選擇那三排改成灰槽 ＋ 白膠囊 ＋ 淡影:`Sq.seg` 回來、`Sq.seg_on` 換畫法。
 # 6 = 2026-10-07 錄音中的「‖ 暫停錄音」:新增 `Sq.pause_page`。
 # 7 = 2026-10-17 重點卡片的備註格坐在灰底上:新增 `Sq.field_well`。
-SCHEMA_VERSION = 7
+# 8 = 2026-11-12 錄音中「★ 重點 | 逐字稿」矮一號:新增 `Sq.seg_sm`、`Sq.seg_sm_on`。
+SCHEMA_VERSION = 8
 
 # 顯示縮放。⚠️ 這幾個值要對上 Windows 顯示設定給得出來的那幾檔。
 # ⚠️ **2026-08-27 從五檔加到八檔**(code review 抓到,使用者選定):膠囊的圖高是**釘死**
@@ -134,6 +135,12 @@ SQ_H_SEG_ON = 31      # 選中的那一格(白膠囊 ＋ 淡影)
 # 選中那顆膠囊四周留給影子的一圈(邏輯 px):膠囊本體上下左右各縮進這麼多,影子往下偏
 # 1、模糊落在那一圈裡。⚠️ 影子的偏移不可以大於它,不然被圖的下緣切掉。
 SQ_SEG_INSET = 2
+# 錄音中右卡「★ 重點 | 逐字稿」那一列(2026-11-12 使用者從三種高度實拍裡選「矮一號」:
+# 一樣整條寬、字小一號)。⚠️ **只給那一列**:「收音情境」與對話框那兩排仍是 37 / 31,
+# 那兩個數字 2026-09-06 選過、不動。畫法、影子、內距規則全同 `seg` / `seg-on`;兩個數字與
+# `desktop.SEG_SM_H` / `SEG_SM_H_ON` 測試釘著,`SEG_PAD` 的幾何條件也逐檔驗這一對。
+SQ_H_SEG_SM = 31
+SQ_H_SEG_SM_ON = 25
 # 「聲音→MD」底下那排子分頁,選中的那一顆(2026-09-01:先前是純色的方角 Frame,
 # 而整個畫面其他東西都是圓角——使用者當場圈出來)。⚠️ 高度沿用一般按鈕的 `SQ_H`:
 # 它們在畫面上本來就是同一個量級,共用一個數字就是把這件事寫死。
@@ -510,6 +517,16 @@ def build_variant(theme: str, scale: float) -> tuple[dict, dict]:
                                     top=inset)
     elems["Sq.seg_on"] = skingen.pill_elem(
         [["", "seg-on"]], oh, obr, p["btn"], padding=0)
+    # 矮一號的那一對(錄音中「★ 重點 | 逐字稿」,見 `SQ_H_SEG_SM`):畫法逐項同上兩張
+    sw_, sh_, sr_, sbr_ = pill(SQ_H_SEG_SM)
+    imgs["seg-sm"] = plate(sw_, sh_, sr_, p["btn"], on=p["card"])
+    elems["Sq.seg_sm"] = skingen.pill_elem([["", "seg-sm"]], sh_, sbr_, p["card"], padding=0)
+    ow_, oh_, or__, obr_ = pill(SQ_H_SEG_SM_ON)
+    imgs["seg-sm-on"] = shadowed_plate(ow_, oh_, oh_ / 2.0 - inset, p["card"], p["btn"], inset,
+                                       dy=px(1, scale), blur=px(3, scale) / 2, alpha=0.16,
+                                       top=inset)
+    elems["Sq.seg_sm_on"] = skingen.pill_elem(
+        [["", "seg-sm-on"]], oh_, obr_, p["btn"], padding=0)
 
     # ---- 「要做什麼」選中的那一格:分頁那顆灰膠囊,但坐在**卡片**上 ----
     # (2026-09-15 使用者選案 C。)形狀與顏色同 `subtab`,差別只有 `on`:分頁坐在視窗底,
