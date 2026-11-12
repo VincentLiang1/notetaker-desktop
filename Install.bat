@@ -11,7 +11,8 @@ rem 當成語法);兩種語言的鍵要一樣多。test_bat.py 守著。
 call :ui_lang
 if "%UI%"=="en" goto msg_en
 set "M_UV=正在安裝 uv 套件管理器..."
-set "M_UV_FAIL=[錯誤] uv 安裝失敗。請檢查網路或代理伺服器設定。"
+set "M_UV_FAIL=[錯誤] uv 安裝失敗。請檢查網路或代理伺服器設定；下載的檔案跟預期的不一樣也會這樣。"
+set "M_UV_OLD=[錯誤] 這台電腦上已經有 uv，但版本太舊，讀不懂這個工具的環境設定。請先更新 uv：在命令提示字元輸入 uv self update，或用當初安裝它的方式更新，再執行一次這個檔案。"
 set "M_SYNC=正在建置 Python 執行環境,第一次需要幾分鐘..."
 set "M_SYNC_FAIL=[錯誤] 環境建置失敗。請參考上方訊息,然後重新執行這個檔案。"
 set "M_DONE=環境建置完成。"
@@ -24,7 +25,8 @@ set "M_BROKEN3=再執行一次這個檔案;若是公司電腦,請把這兩行轉給 IT。"
 goto msgs_set
 :msg_en
 set "M_UV=Installing the uv package manager..."
-set "M_UV_FAIL=[Error] Failed to install uv. Check the network or proxy settings."
+set "M_UV_FAIL=[Error] Failed to install uv. Check the network or proxy settings; this also happens if the downloaded file is not the expected one."
+set "M_UV_OLD=[Error] uv is already installed on this computer but is too old to read this tool's setup. Update uv first: run uv self update in a command prompt, or update it the way it was installed, then run this file again."
 set "M_SYNC=Building the Python environment, the first time takes a few minutes..."
 set "M_SYNC_FAIL=[Error] Setup failed. See the messages above, then run this file again."
 set "M_DONE=Setup complete."
@@ -36,18 +38,28 @@ set "M_BROKEN2=software quarantined Python. Add this tool folder and %%APPDATA%%
 set "M_BROKEN3=and run this file again. On a company computer, forward these lines to IT."
 :msgs_set
 
+rem uv:已經有就沿用、只檢查版本夠不夠新；沒有才裝固定版本並比對 SHA-256，見 scripts\install_uv.ps1 檔頭
+rem 每次都叫它，版本檢查才做得到；讀檔成 scriptblock 執行，不受執行原則限制
+set "MS_UVPS=%~dp0scripts\install_uv.ps1"
+set "MS_UV_PATH="
 where uv >nul 2>nul
 rem 區塊內的訊息不可出現半形 ")",會被 cmd 當成區塊結尾提前收掉
 if errorlevel 1 (
     echo %M_UV%
-    powershell -ExecutionPolicy Bypass -NoProfile -Command "irm https://astral.sh/uv/install.ps1 | iex"
-    if errorlevel 1 (
-        echo %M_UV_FAIL%
-        pause
-        exit /b 1
-    )
-    set "PATH=%USERPROFILE%\.local\bin;%PATH%"
+    set "MS_UV_PATH=1"
 )
+powershell -ExecutionPolicy Bypass -NoProfile -Command "try { & ([scriptblock]::Create([IO.File]::ReadAllText($env:MS_UVPS))) } catch { Write-Host $_; if ($_.Exception.Message -like 'UV_TOO_OLD*') { exit 3 }; exit 1 }"
+if errorlevel 3 (
+    echo %M_UV_OLD%
+    pause
+    exit /b 1
+)
+if errorlevel 1 (
+    echo %M_UV_FAIL%
+    pause
+    exit /b 1
+)
+if defined MS_UV_PATH set "PATH=%USERPROFILE%\.local\bin;%PATH%"
 
 echo %M_SYNC%
 rem --frozen: install exactly what uv.lock pins, never re-resolve (same as the update helper)
